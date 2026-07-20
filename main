@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+source ./lib/core.sh || exit 1
+
+fetch_data
