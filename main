@@ -2,4 +2,10 @@
 
 source ./lib/core.sh || exit 1
 
-fetch_data
+trap cleanup exit
+
+setup
+
+keyboard_input <&4 &
+
+event_handler
