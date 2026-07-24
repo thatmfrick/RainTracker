@@ -5,7 +5,4 @@ source ./lib/core.sh || exit 1
 trap cleanup exit
 
 setup
-
-keyboard_input <&4 &
-
 event_handler
