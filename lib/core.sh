@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
+CSV_FILE='test/fons.csv'
+
 select_options() {
     local \
-        KB_PID="$1" PICTURE_SIZE_LIST=(256 512) \
-        ZOOM_LIST=(1 2 3 4 5 6 7) VIRTUAL_ZOOM_LIST=(1 2 3 4 5 6 7 8 9 10) \
+        KB_PID="$1" PICTURE_SIZE_LIST=(256 512 1024) \
+        ZOOM_LIST=(1 2 3 4 5 6 7) VIRTUAL_ZOOM_LIST=(1 2 3 4 5 6 7 8) \
         SHAPE_LIST=('rectangle' 'circle' 'polygon') SCALE_FACTOR \
         CROP_SIZE CROP_X CROP_Y PICTURE_SIZE TILE_SIZE ZOOM \
         VIRTUAL_ZOOM SHAPE
@@ -84,12 +86,30 @@ select_options() {
         "$SHAPE" "$SCALE_FACTOR" "$CROP_SIZE" "$CROP_X" "$CROP_Y" &
 }
 
-calculate_color() {
-    local \
-        CENTER_LAT="$1" CENTER_LON="$2" TILE_SIZE="$3" \
-        PICTURE_SIZE="$4" ZOOM="$5" PIC="$6" POLYGON=""
+calculate_area_points() {
+    local POLY_PIC="$1" RADAR_PIC="$2"
+    local POLY_PIXELS_COLOR_FILTERED RADAR_PIXELS_COLOR_FILTERED
+    local FINAL_POINTS COUNT
 
-    magick "$PIC" -depth 8 txt:- >pixels.txt
+    POLY_PIXELS_COLOR_FILTERED=$(mktemp --suffix=.txt)
+    RADAR_PIXELS_COLOR_FILTERED=$(mktemp --suffix=.txt)
+    FINAL_POINTS=$(mktemp --suffix=.txt)
+
+    magick "$POLY_PIC" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000"' | cut -d: -f1 >"$POLY_PIXELS_COLOR_FILTERED"
+    magick "$RADAR_PIC" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000" {print $1, $3}' >"$RADAR_PIXELS_COLOR_FILTERED"
+
+    awk -F': ' 'FNR==NR{color[$1]=$2;next} ($0 in color){print color[$0]}' "$RADAR_PIXELS_COLOR_FILTERED" "$POLY_PIXELS_COLOR_FILTERED" >"$FINAL_POINTS"
+
+    COUNT=$(wc -l <"$FINAL_POINTS")
+
+    if ((COUNT == 0)); then
+        tput cup $((LINES + 1)) 0
+        echo "No precipitations in the Area"
+    else
+        tput cup $((LINES + 1)) 0
+        notify-send "Possible precepitation!!"
+        echo "Possible precipitation in the Area"
+    fi
 }
 
 latlon_to_pixel() {
@@ -139,7 +159,7 @@ pixel_coords() {
             ')
 
         POLYGON+="$PX,$PY "
-    done <test.csv
+    done <"$CSV_FILE"
 
     echo "$POLYGON"
 }
@@ -148,33 +168,41 @@ draw_polygon() {
     local \
         CENTER_LAT="$1" CENTER_LON="$2" TILE_SIZE="$3" \
         PICTURE_SIZE="$4" ZOOM="$5" SHAPE="$6" \
-        POLYGON_PIC="$7" POLYGON=""
+        POLYGON_AREA_PIC="$7" POLYGON_BORDER_PIC="$8" POLYGON=""
 
     POLYGON="$(pixel_coords "$CENTER_LAT" "$CENTER_LON" "$TILE_SIZE" "$PICTURE_SIZE" "$ZOOM")"
 
-    magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill \
-        none -stroke lime -strokewidth 1 \
-        -draw "$SHAPE $POLYGON" "$POLYGON_PIC"
+    magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill none \
+        -stroke lime -strokewidth 1 \
+        -draw "$SHAPE $POLYGON" "$POLYGON_BORDER_PIC"
+
+    magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill lime \
+        -stroke lime -strokewidth 1 \
+        -draw "$SHAPE $POLYGON" "$POLYGON_AREA_PIC"
 }
 
 generate_data() {
-    local \
-        PICTURE_SIZE="$1" TILE_SIZE="$2" ZOOM="$3" VIRTUAL_ZOOM="$4" \
-        SHAPE="$5" SCALE_FACTOR="$6" CROP_SIZE="$7" CROP_X="$8" \
-        CROP_Y="$9" RAINVIEWER_API='https://api.rainviewer.com/public/weather-maps.json' \
-        RAINVIEWER_PIC POLYGON_PIC COMPOSITE_PIC CROPPED_RADAR RESPONSE \
-        TIME LAST_TIME=99 IMAGE_PATH LAT LON
+    local PICTURE_SIZE="$1" TILE_SIZE="$2" ZOOM="$3" VIRTUAL_ZOOM="$4"
+    local SHAPE="$5" SCALE_FACTOR="$6" CROP_SIZE="$7" CROP_X="$8" CROP_Y="$9"
+
+    local RAINVIEWER_API='https://api.rainviewer.com/public/weather-maps.json'
+    local RESPONSE TIME LAST_TIME=99 IMAGE_PATH LAT LON
+
+    local RAINVIEWER_PIC POLYGON_BORDER_PIC POLYGON_AREA_PIC
+    local COMPOSITE_PIC CROPPED_RADAR_PIC
 
     RAINVIEWER_PIC=$(mktemp --suffix=.png)
-    POLYGON_PIC=$(mktemp --suffix=.png)
+    POLYGON_BORDER_PIC=$(mktemp --suffix=.png)
+    POLYGON_AREA_PIC=$(mktemp --suffix=.png)
     COMPOSITE_PIC=$(mktemp --suffix=.png)
-    CROPPED_RADAR=$(mktemp --suffix=.png)
+    CROPPED_RADAR_PIC=$(mktemp --suffix=.png)
 
-    IFS=, read -r LAT LON <test.csv
+    IFS=, read -r LAT LON <"$CSV_FILE"
 
     draw_polygon \
         "$LAT" "$LON" "$TILE_SIZE" "$PICTURE_SIZE" \
-        "$((ZOOM + VIRTUAL_ZOOM))" "$SHAPE" "$POLYGON_PIC" &
+        "$((ZOOM + VIRTUAL_ZOOM))" "$SHAPE" \
+        "$POLYGON_AREA_PIC" "$POLYGON_BORDER_PIC" &
     POLYGON_PID=$!
 
     while true; do
@@ -189,24 +217,22 @@ generate_data() {
                 -crop "${CROP_SIZE}x${CROP_SIZE}+${CROP_X}+${CROP_Y}" \
                 +repage -filter point \
                 -resize "${PICTURE_SIZE}x${PICTURE_SIZE}" \
-                "$CROPPED_RADAR"
+                "$CROPPED_RADAR_PIC"
 
             wait "$POLYGON_PID"
 
             magick \
                 -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none \
-                "$CROPPED_RADAR" -composite \
-                "$POLYGON_PIC" -composite \
+                "$CROPPED_RADAR_PIC" -composite \
+                "$POLYGON_BORDER_PIC" -composite \
                 "$COMPOSITE_PIC"
 
             tput clear
-            # tput cup $(((LINES - 30) / 2)) $(((COLUMNS - 50) / 2))
             chafa --polite on --probe off "$COMPOSITE_PIC"
-            LAST_TIME=$TIME
 
-            # calculate_color \
-            # "$LAT" "$LON" "$TILE_SIZE" \
-            # "$PICTURE_SIZE" "$((ZOOM + VIRTUAL_ZOOM))" "$POLYGON_PIC"
+            calculate_area_points "$POLYGON_AREA_PIC" "$CROPPED_RADAR_PIC"
+
+            LAST_TIME=$TIME
         fi
         sleep 60
     done
