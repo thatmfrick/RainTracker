@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-CSV_FILE='test/fons.csv'
+CSV_FILE='test.csv'
 
 select_options() {
     local \
