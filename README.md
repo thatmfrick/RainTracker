@@ -8,17 +8,17 @@ A tool for tracking and logging precipitations on a given area powered by 👇
 - [ImageMagic](https://imagemagick.org/#gsc.tab=0) for image manipulation.
 - [Chafa](https://hpjansson.org/chafa/) for printing images in the terminal (just visual).
 
-<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/a1176230-b27c-4071-9538-a1dc9cb4dded" />
+<img width="1920" height="1078" alt="image" src="https://github.com/user-attachments/assets/a6ae5d39-2fd7-4acf-807b-36cc1a69d0c9" />
 
 - RainView API max zoom level is 7 with 512px tiles so i have craked down some math for creating a virtual zoom and for drawing correctly in scale all the given coordinates from a csv file (`tmp.csv`).
 
 - Currently the program will ask for user input via select (gonna change later) regarding parameters like:
-  - Image size (256x256, 512x512) is technically possible to go up to 2048x2048 but maybe later...
+  - Image size (256x256, 512x512) is technically possible to go up to 2048x2048 but maybe later (performance issues for detecting pixels in the given area)
   - Zoom level (API) 1 to 7
-  - Virtual zoom level (y/n) 1 to 10, so total zoom = zoom + virtual zoom
+  - Virtual zoom level (y/n) 1 to 8, so total zoom = zoom + virtual zoom
   - Shape:
     - Rectangle: requires only two points (top_left corner, bottom_right corner)
-    - Circle: requires oly two points (center point and another one around it to create the radius)
+    - Circle: requires only two points (center point and another one around it to create the radius)
     - Polygon: requires 2+ points (order the points clockwise)
 
 ## To-do
