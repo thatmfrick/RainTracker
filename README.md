@@ -18,7 +18,7 @@ A tool for tracking and logging precipitations on a given area powered by 👇
   - File to load (stored inside config folder)
   - Relative shape of the area (circle or rectange) in case only two coordinates are passed otherwise it will auto detect a polygon.
     
-    - Regarding the coordinates in the '.csv' files:
+    - Regarding the coordinates in the `.csv` file:
       - Rectangle: requires only two points (top_left corner, bottom_right corner)
       - Circle: requires only two points (center point and another one around it to create the radius)
       - Polygon: requires 2+ points (order the points clockwise)
