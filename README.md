@@ -13,21 +13,22 @@ A tool for tracking and logging precipitations on a given area powered by 👇
 - RainView API max zoom level is 7 with 512px tiles.
 - With some math I have created an higher zoom level called "virtual zoom" and also the possibly to draw (in scale) a given area starting from a simple `.csv` file filled with `lat,lon` (latitude and longitude) values.
 
-- Currently the program will ask for user input via bash's select (gonna change later) regarding parameters like:
+- Currently the program will ask to the user:
 
-  - Image size (256x256, 512x512, 1024x1024) is technically possible to go up to 2048x2048 but performances gonna drop (=~4.2M pixels to analyze)
+  - File to load (stored inside config folder)
+  - Relative shape of the area (circle or rectange) in case only two coordinates are passed otherwise it will auto detect a polygon.
+    
+    - Regarding the coordinates in the '.csv' files:
+      - Rectangle: requires only two points (top_left corner, bottom_right corner)
+      - Circle: requires only two points (center point and another one around it to create the radius)
+      - Polygon: requires 2+ points (order the points clockwise)
 
-  - Zoom level (API) 1 to 7
-
-  - Virtual zoom level (y/n->0) 1 to 8, so total zoom = zoom + virtual zoom
-
-  - Shape:
-    - Rectangle: requires only two points (top_left corner, bottom_right corner)
-    - Circle: requires only two points (center point and another one around it to create the radius)
-    - Polygon: requires 2+ points (order the points clockwise)
+  - Zoom level 1 to 16
 
 ## To-do
 
-- [ ] Extract pixel's color form the designed area and evaluate precipitations probability in the area, or upcoming ones.
-- [ ] Improve the TUI
-- [ ] Optimize
+- [ ] Advanced pixel analysis in the given area for providing more informations.
+- [ ] Try to add a map below the area.
+- [ ] Improve the TUI both UI&UX.
+- [ ] Containerize the program.
+- [ ] Create a non-tui version (just logging).
