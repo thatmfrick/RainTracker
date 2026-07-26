@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
 source ./lib/core.sh || exit 1
+source ./lib/raintracker.sh || exit 1
+source ./lib/variables.sh || exit 1
 
 trap cleanup exit
 
