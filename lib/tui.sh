@@ -87,7 +87,7 @@ event_handler() {
     kb_pid=$!
     echo 'key-change-file' >&3
     while true; do
-        if read -ra data -t 1 <&3; then
+        if IFS='|' read -ra data -t 1 <&3; then
             local event=${data[0]}
             case "$event" in
             key-quit) exit ;;
