@@ -1,3 +1,4 @@
 test/
-config/bd.csv
-config/fons.csv
+config/BDZ.csv
+config/LSP.csv
+config/PR.csv
