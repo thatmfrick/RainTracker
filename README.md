@@ -1,34 +1,42 @@
 # RainTracker
-A tool for tracking and logging precipitations on a given area powered by 👇
 
-- [Bash](https://www.gnu.org/savannah-checkouts/gnu/bash/manual/bash.html) (Dave Eddy's fault)
-- [RainView API](https://www.rainviewer.com/) for fetching precipitations heat maps.
-- [jq](https://jqlang.org/) simple queries to RainView's API json.
-- [awk](https://docs.rockylinux.org/10/books/sed_awk_grep/4_awk_command/) (math calculi).
-- [ImageMagic](https://imagemagick.org/#gsc.tab=0) for image manipulation.
-- [Chafa](https://hpjansson.org/chafa/) for printing images in the terminal (just visual).
+A terminal tool for tracking and visualizing precipitation over a given area, powered by:
 
-<img width="1920" height="1078" alt="image" src="https://github.com/user-attachments/assets/a6ae5d39-2fd7-4acf-807b-36cc1a69d0c9" />
+- [Bash](https://www.gnu.org/savannah-checkouts/gnu/bash/manual/bash.html) — Dave Eddy's fault
+- [RainViewer API](https://www.rainviewer.com/) — fetches precipitation heat maps
+- [jq](https://jqlang.org/) — queries RainViewer's JSON responses
+- [awk](https://docs.rockylinux.org/10/books/sed_awk_grep/4_awk_command/) — math calculations
+- [ImageMagick](https://imagemagick.org/) — image manipulation
+- [Chafa](https://hpjansson.org/chafa/) — renders images in the terminal
 
-- RainView API max zoom level is 7 with 512px tiles.
-- With some math I have created an higher zoom level called "virtual zoom" and also the possibly to draw (in scale) a given area starting from a simple `.csv` file filled with `lat,lon` (latitude and longitude) values.
+<img width="1110" height="977" alt="RainTracker screenshot" src="https://github.com/user-attachments/assets/2f7e7c76-b024-410c-b303-2cfa17cd92bc" />
 
-- Currently the program will ask to the user:
+## How it works
 
-  - File to load (stored inside config folder)
-  - Relative shape of the area (circle or rectange) in case only two coordinates are passed otherwise it will auto detect a polygon.
-    
-    - Regarding the coordinates in the `.csv` file:
-      - Rectangle: requires only two points (top_left corner, bottom_right corner)
-      - Circle: requires only two points (center point and another one around it to create the radius)
-      - Polygon: requires 2+ points (order the points clockwise)
+RainViewer's API caps out at zoom level 7 with 512px tiles. RainTracker layers some extra math on top of that to provide:
 
-  - Zoom level 1 to 16
+- A **virtual zoom** level beyond RainViewer's native cap
+- The ability to draw a scaled area on the map from a simple `.csv` file of `lat,lon` coordinates
+
+### Usage flow
+
+When run, the program prompts for:
+
+1. **File to load** (read from the config folder)
+2. **Location/area name**
+3. **Zoom level** — from 1 to 16
+
+### Coordinate file format
+
+| Shape | Points required | Meaning |
+|---|---|---|
+| Circle | 2 | center point, any point on the radius |
+| Polygon | 2+ | vertices, ordered **clockwise** |
 
 ## To-do
 
-- [ ] Advanced pixel analysis in the given area for providing more informations.
-- [ ] Try to add a map below the area.
-- [ ] Improve the TUI both UI&UX.
-- [ ] Containerize the program.
-- [ ] Create a non-tui version (just logging).
+- [ ] Advanced pixel analysis of the selected area for richer info
+- [ ] Render a base map beneath the precipitation overlay
+- [ ] Polish the TUI (UI & UX)
+- [ ] Containerize the program
+- [ ] Add a non-TUI mode (logging only)
