@@ -1,33 +1,35 @@
 calculate_area_points() {
-    local POLY_PIC="$1" RADAR_PIC="$2"
-    local POLY_PIXELS_COLOR_FILTERED RADAR_PIXELS_COLOR_FILTERED
-    local FINAL_POINTS COUNT
+    local poly_pic="$1" radar_pic="$2"
+    local poly_pixels_color_filtered radar_pixels_color_filtered
+    local final_points count len
 
-    POLY_PIXELS_COLOR_FILTERED=$(mktemp --suffix=.txt)
-    RADAR_PIXELS_COLOR_FILTERED=$(mktemp --suffix=.txt)
-    FINAL_POINTS=$(mktemp --suffix=.txt)
+    poly_pixels_color_filtered=$(mktemp --suffix=.txt)
+    radar_pixels_color_filtered=$(mktemp --suffix=.txt)
+    final_points=$(mktemp --suffix=.txt)
 
-    magick "$POLY_PIC" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000"' | cut -d: -f1 >"$POLY_PIXELS_COLOR_FILTERED"
-    magick "$RADAR_PIC" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000" {print $1, $3}' >"$RADAR_PIXELS_COLOR_FILTERED"
+    magick "$poly_pic" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000"' | cut -d: -f1 >"$poly_pixels_color_filtered"
+    magick "$radar_pic" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000" {print $1, $3}' >"$radar_pixels_color_filtered"
 
-    awk -F': ' 'FNR==NR{color[$1]=$2;next} ($0 in color){print color[$0]}' "$RADAR_PIXELS_COLOR_FILTERED" "$POLY_PIXELS_COLOR_FILTERED" >"$FINAL_POINTS"
+    awk -F': ' 'FNR==NR{color[$1]=$2;next} ($0 in color){print color[$0]}' "$radar_pixels_color_filtered" "$poly_pixels_color_filtered" >"$final_points"
 
-    COUNT=$(wc -l <"$FINAL_POINTS")
+    count=$(wc -l <"$final_points")
+    len=$(((COLUMNS - 29) / 2))
 
-    if ((COUNT == 0)); then
-        tput cup $((LINES + 1)) 0
-        echo "No precipitations in the Area"
+    tput cup $(((LINES + 29) / 2)) $(((COLUMNS - 29) / 2))
+    printf "%${len}s" ''
+    if ((count == 0)); then
+        tput cup $(((LINES + 29) / 2)) $(((COLUMNS - 29) / 2))
+        echo "No precipitations in the area"
     else
-        tput cup $((LINES + 1)) 0
-        notify-send "Possible precepitation!!"
-        echo "Possible precipitation in the Area"
+        tput cup $(((LINES + 29) / 2)) $(((COLUMNS - 34) / 2))
+        echo "Possible precipitations in the area"
     fi
 }
 
 latlon_to_pixel() {
-    local LAT="$1" LON="$2" TILE_SIZE="$3" ZOOM="$4"
-    awk -v lat="$LAT" -v lon="$LON" \
-        -v tile_size="$TILE_SIZE" -v zoom="$ZOOM" '
+    local lat="$1" lon="$2" tile_size="$3" zoom="$4"
+    awk -v lat="$lat" -v lon="$lon" \
+        -v tile_size="$tile_size" -v zoom="$zoom" '
         BEGIN {
             if (lat > 85.051129)  lat = 85.051129
             if (lat < -85.051129) lat = -85.051129
@@ -48,56 +50,57 @@ latlon_to_pixel() {
 }
 
 pixel_coords() {
-    local CENTER_LAT="$1" CENTER_LON="$2"
-    local TILE_SIZE="$3" PICTURE_SIZE="$4"
-    local ZOOM="$5" csv_file="$6" POLYGON=""
-    local CENTER_X CENTER_Y WORLD_X WORLD_Y
+    local center_lat="$1" center_lon="$2"
+    local tile_size="$3" PICTURE_SIZE="$4"
+    local zoom="$5" csv_file="$6" polygon=""
+    local center_x center_y world_x world_y
 
-    read -r CENTER_X CENTER_Y <<<"$(latlon_to_pixel "$CENTER_LAT" "$CENTER_LON" "$TILE_SIZE" "$ZOOM")"
+    read -r center_x center_y <<<"$(latlon_to_pixel "$center_lat" "$center_lon" "$tile_size" "$zoom")"
 
-    while IFS=, read -r LAT LON; do
-        read -r WORLD_X WORLD_Y <<<"$(latlon_to_pixel "$LAT" "$LON" "$TILE_SIZE" "$ZOOM")"
+    while IFS=, read -r lat lon; do
+        read -r world_x world_y <<<"$(latlon_to_pixel "$lat" "$lon" "$tile_size" "$zoom")"
 
-        PX=$(awk -v x="$WORLD_X" -v cx="$CENTER_X" -v img_size="$PICTURE_SIZE" '
+        px=$(awk -v x="$world_x" -v cx="$center_x" -v img_size="$PICTURE_SIZE" '
                 BEGIN {
                     printf "%.0f", img_size/2 + (x - cx)
                 }
             ')
 
-        PY=$(awk -v y="$WORLD_Y" -v cy="$CENTER_Y" -v img_size="$PICTURE_SIZE" '
+        py=$(awk -v y="$world_y" -v cy="$center_y" -v img_size="$PICTURE_SIZE" '
                 BEGIN { 
                     printf "%.0f", img_size/2 + (y - cy)
                 }
             ')
 
-        POLYGON+="$PX,$PY "
+        polygon+="$px,$py "
     done <"$csv_file"
 
-    echo "$POLYGON"
+    echo "$polygon"
 }
 
 draw_polygon() {
-    local CENTER_LAT="$1" CENTER_LON="$2"
-    local TILE_SIZE="$3" PICTURE_SIZE="$4"
-    local ZOOM="$5" SHAPE="$6"
-    local POLYGON_AREA_PIC="$7" POLYGON_BORDER_PIC="$8" csv_file="$9" POLYGON=""
+    local center_lat="$1" center_lon="$2"
+    local tile_size="$3" zoom="$4" shape="$5"
+    local polygon_area_pic="$6" polygon_border_pic="$7"
+    local csv_file="$8" polygon=""
 
-    POLYGON="$(pixel_coords "$CENTER_LAT" "$CENTER_LON" "$TILE_SIZE" "$PICTURE_SIZE" "$ZOOM" "$csv_file")"
+    polygon="$(pixel_coords "$center_lat" "$center_lon" "$tile_size" "$PICTURE_SIZE" "$zoom" "$csv_file")"
 
     magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill none \
         -stroke lime -strokewidth 2 \
-        -draw "$SHAPE $POLYGON" "$POLYGON_BORDER_PIC"
+        -draw "$shape $polygon" "$polygon_border_pic"
 
     magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill lime \
         -stroke lime -strokewidth 2 \
-        -draw "$SHAPE $POLYGON" "$POLYGON_AREA_PIC"
+        -draw "$shape $polygon" "$polygon_area_pic"
 }
 
 get_shape() {
     stty echo
 
+    local kb_pid="$1"
     local csv_dir=config
-    local selected_file file_points shape
+    local selected_file file_points shape location
 
     mkdir "$csv_dir" 2>/dev/null
 
@@ -105,7 +108,7 @@ get_shape() {
         fatal 'No files to source'
     fi
 
-    tput cup $(((LINES + 1) / 2)) $(((COLUMNS - $(echo 'Select one of the .csv files:' | wc -L)) / 2))
+    tput cup $(((LINES + 1) / 2)) $(((COLUMNS - $(echo 'Select one of the following files:' | wc -L)) / 2))
     printf '%s\n' "Select one of the following files: "
 
     select file in "$csv_dir/"*; do
@@ -114,58 +117,49 @@ get_shape() {
         break
     done
 
-    tput clear
+    clean_half_screen
 
-    if ((file_points > 2)); then
-        shape='polygon'
-    elif ((file_points == 2)); then
-        tput cup $(((LINES + 1) / 2)) $(((COLUMNS - $(echo 'Select the shape (1=Square; 2=Circle):' | wc -L)) / 2))
-        printf '%s\n' "Select the shape (1=Square; 2=Circle): "
-        select num in 1 2; do
-            case $num in
-            1) shape='square' ;;
-            2) shape='circle' ;;
-            esac
-            break
-        done
-    fi
-
-    tput clear
-
-    echo "selected-shape $shape $selected_file" >&3
-}
-
-select_options() {
-    local kb_pid="$1" shape="$2" csv_file="$3"
-    local picture_size=512
-    local api_zoom virtual_zoom
-    local crop_size crop_x crop_y
-    local shape
-
-    printf '%s\n' "Select the zoom level"
-    read -r api_zoom virtual_zoom crop_size crop_x crop_y <<<"$(zoom_select "$picture_size")"
-
-    tput clear
+    tput cup $(((LINES + 1) / 2)) $(((COLUMNS - $(echo 'Insert location name:' | wc -L)) / 2))
+    printf '%s\n' "Insert location name: "
+    tput cup $(((LINES + 1) / 2)) $(((1 + COLUMNS + $(echo 'Insert location name:' | wc -L)) / 2))
+    read -r location
 
     stty -echo
     kill -CONT "$kb_pid"
 
-    generate_data \
-        "$picture_size" "$picture_size" "$api_zoom" "$virtual_zoom" \
-        "$shape" "$crop_size" "$crop_x" "$crop_y" "$csv_file" &
+    while ((i < LINES / 2)); do
+        tput cup $((LINES / 2 + i)) 0
+        printf "%${COLUMNS}s" ' '
+        ((i++))
+    done
+
+    if ((file_points > 2)); then
+        shape='polygon'
+    elif ((file_points == 2)); then
+        shape='circle'
+    else
+        fatal "You need at least 2 poins"
+    fi
+
+    echo "selected-shape|$shape|$selected_file|$location" >&3
 }
 
 zoom_select() {
-    local picture_size="$1"
+    local kb_pid="$1"
     local full_zoom
     local zoom_values=({1..16})
+
+    stty echo
 
     select value in "${zoom_values[@]}"; do
         full_zoom=$value
         break
     done
 
-    awk -v full_zoom="$full_zoom" -v picture_size="$picture_size" '
+    stty -echo
+    kill -CONT "$kb_pid"
+
+    awk -v full_zoom="$full_zoom" -v picture_size="$PICTURE_SIZE" '
         BEGIN {
             if (full_zoom > 7) {
                 api_zoom = 7 
@@ -188,56 +182,63 @@ zoom_select() {
 }
 
 generate_data() {
-    local PICTURE_SIZE="$1" TILE_SIZE="$2" ZOOM="$3" VIRTUAL_ZOOM="$4"
-    local SHAPE="$5" CROP_SIZE="$6" CROP_X="$7" CROP_Y="$8" csv_file="$9"
+    local tile_size zoom="$1" virtual_zoom="$2" shape="$3"
+    local crop_size="$4" crop_x="$5" crop_y="$6" csv_file="$7" location="$8"
+    tile_size=$PICTURE_SIZE
 
-    local RAINVIEWER_API='https://api.rainviewer.com/public/weather-maps.json'
-    local RESPONSE TIME LAST_TIME=99 IMAGE_PATH LAT LON
+    local response time last_time=99 image_path lat lon
 
-    local RAINVIEWER_PIC POLYGON_BORDER_PIC POLYGON_AREA_PIC
-    local COMPOSITE_PIC CROPPED_RADAR_PIC
+    local rainviewer_pic polygon_border_pic polygon_area_pic
+    local composite_pic cropped_radar_pic
 
-    RAINVIEWER_PIC=$(mktemp --suffix=.png)
-    POLYGON_BORDER_PIC=$(mktemp --suffix=.png)
-    POLYGON_AREA_PIC=$(mktemp --suffix=.png)
-    COMPOSITE_PIC=$(mktemp --suffix=.png)
-    CROPPED_RADAR_PIC=$(mktemp --suffix=.png)
+    rainviewer_pic=$(mktemp --suffix=.png)
+    polygon_border_pic=$(mktemp --suffix=.png)
+    polygon_area_pic=$(mktemp --suffix=.png)
+    composite_pic=$(mktemp --suffix=.png)
+    cropped_radar_pic=$(mktemp --suffix=.png)
 
-    IFS=, read -r LAT LON <"$csv_file"
+    IFS=, read -r lat lon <"$csv_file"
 
     draw_polygon \
-        "$LAT" "$LON" "$TILE_SIZE" "$PICTURE_SIZE" \
-        "$((ZOOM + VIRTUAL_ZOOM))" "$SHAPE" \
-        "$POLYGON_AREA_PIC" "$POLYGON_BORDER_PIC" "$csv_file" &
-    POLYGON_PID=$!
+        "$lat" "$lon" "$tile_size" \
+        "$((zoom + virtual_zoom))" "$shape" \
+        "$polygon_area_pic" "$polygon_border_pic" "$csv_file" &
+    polygon_pid=$!
 
     while true; do
-        RESPONSE=$(curl -sf "$RAINVIEWER_API")
-        TIME=$(date --date "@$(jq -r '.radar.past[-1].time' <<<"$RESPONSE")" +%M)
-        IMAGE_PATH="$(jq -r '.host + .radar.past[-1].path' <<<"$RESPONSE")"
-        if ((10#$TIME != 10#$LAST_TIME)); then
-            curl -sf "$IMAGE_PATH/$PICTURE_SIZE/$ZOOM/$LAT/$LON/0/1_1.png" >"$RAINVIEWER_PIC"
+        response=$(curl -sf "$RAINVIEWER_API")
+        time=$(date --date "@$(jq -r '.radar.past[-1].time' <<<"$response")" +%M)
+        image_path="$(jq -r '.host + .radar.past[-1].path' <<<"$response")"
+        if ((10#$time != 10#$last_time)); then
+            curl -sf "$image_path/$PICTURE_SIZE/$zoom/$lat/$lon/0/1_1.png" >"$rainviewer_pic"
 
             magick \
-                "$RAINVIEWER_PIC" \
-                -crop "${CROP_SIZE}x${CROP_SIZE}+${CROP_X}+${CROP_Y}" \
+                "$rainviewer_pic" \
+                -crop "${crop_size}x${crop_size}+${crop_x}+${crop_y}" \
                 +repage \
+                -filter point \
                 -resize "${PICTURE_SIZE}x${PICTURE_SIZE}" \
-                "$CROPPED_RADAR_PIC"
+                "$cropped_radar_pic"
 
-            wait "$POLYGON_PID"
+            wait "$polygon_pid"
 
             magick \
-                -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none \
-                "$CROPPED_RADAR_PIC" -composite \
-                "$POLYGON_BORDER_PIC" -composite \
-                "$COMPOSITE_PIC"
+                -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:black \
+                "$cropped_radar_pic" -composite \
+                "$polygon_border_pic" -composite \
+                -fill none -stroke white -strokewidth 2 \
+                -draw "rectangle 0,0,$((PICTURE_SIZE - 1)),$((PICTURE_SIZE - 1))" \
+                "$composite_pic"
 
-            chafa --clear --polite on --probe off "$COMPOSITE_PIC"
+            tput cup $(((LINES - 22) / 2)) $(((COLUMNS - 40) / 2))
+            printf '%s' "${SOFT_BLUE}${RESET} $location"
 
-            calculate_area_points "$POLYGON_AREA_PIC" "$CROPPED_RADAR_PIC"
+            tput cup $(((LINES - 17) / 2)) $(((COLUMNS - 40) / 2))
+            chafa --polite on --probe off "$composite_pic"
 
-            LAST_TIME=$TIME
+            calculate_area_points "$polygon_area_pic" "$cropped_radar_pic"
+
+            last_time=$time
         fi
         sleep 60
     done
@@ -247,7 +248,7 @@ draw_logo() {
     local logo_width=82
     local logo_height=6
     local x=$((COLUMNS / 2 - logo_width / 2))
-    local y=$((LINES / 2 - logo_height / 2))
+    local y=$((logo_height + 6))
 
     while IFS= read -r line; do
         tput cup $((y - 10)) "$x"
@@ -256,21 +257,11 @@ draw_logo() {
     done <<<"$LOGO"
 }
 
-# Every tile is 256px, at zoom level 7 we will have 2^7 tiles = 128x128 grids so 256*2^7=32768px that will cover the whole world.
-# 2^7 is like the scale.
-
-# Now in order to convert a given longitude into a x pixel position: PIXEL_X = MAX_PX * (0.5 + lon / 360).
-# This (0.5 + lon / 360) will print a value (to 0 to 1) that is representing proportionally where that longitude sits in like a percentage, that longitude is for example 73% of the way across the map, left to right.
-
-# Multiplying this by MAX_PX we will get the actual pixel number.
-
-# Longitude covers the whole world horizontally from -180 to +180 degrees
-# lon = -180° -> 0.5 + (-180/360) = 0 (far left edge)
-# lon = 180° -> 0.5 + (180/360) = 1 (far right edge)
-# lon = 0° -> 0.5 + (0/365) = 0.5 (center of the map)
-
-# in order to calculate the latitude in pixels we have to use this formula that icludes the Mercator stretching function that we divide by 4pi and subtract by 0.5 that squashes the value back to a usable 0-1 fraction (0 = top of the map, 1 = bottom)
-
-# y = tile_size * (0.5 - log((1 + siny) / (1 - siny)) / (4 * pi))
-
-# siny=sin(lat *pi / 180)
+draw_menu() {
+    local i=0
+    while IFS= read -r line; do
+        tput cup $((LINES - 4 + i)) $(((COLUMNS - 14) / 2))
+        printf %s "$line"
+        ((i++))
+    done <<<"$MENU_LIST"
+}
