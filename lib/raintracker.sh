@@ -47,12 +47,18 @@ get_shape() {
     local csv_dir=config
     local selected_file file_points shape location
     local files=("$csv_dir"/*) max_index
-    local i=0 j=0 files=("$csv_dir/"*) max="" half_files
+    local i=0 j=0 k=0 files=("$csv_dir/"*) max="" half_files
     local half_files=$((${#files[@]} / 2))
 
     max_index=$((${#files[@]} - 1))
 
     mkdir "$csv_dir" 2>/dev/null
+
+    while ((k < 22)); do
+        tput cup $((LINES - 13 - k)) $((COLUMNS / 2))
+        printf "%${COLUMNS}s" ''
+        ((k++))
+    done
 
     if [ -z "$(ls -A "$csv_dir" 2>/dev/null)" ]; then
         fatal 'No files to source'
@@ -98,10 +104,10 @@ get_shape() {
         ((i++))
     done
 
-    tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2))
-    printf '%s' "🗺️ Location: "
     tput cup $(((LINES - 17) / 2)) $((13 + COLUMNS / 2))
     printf '%20s' ''
+    tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2))
+    printf '%s' "🗺️ Location: "
     tput cup $(((LINES - 17) / 2)) $((13 + COLUMNS / 2))
     read -r location
 
