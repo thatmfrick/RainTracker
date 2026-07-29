@@ -2,6 +2,7 @@
 
 source ./lib/tui.sh || exit 1
 source ./lib/raintracker.sh || exit 1
+source ./lib/math.sh || exit 1
 source ./lib/variables.sh || exit 1
 
 trap cleanup exit
