@@ -37,17 +37,11 @@ setup() {
     stty -echo
     exec 4</dev/tty || fatal 'no terminal detected'
     create_pipe
-    connection_status
+    # connection_status
     draw_logo
-}
-
-clean_half_screen() {
-    local i=0
-    while ((i < LINES / 2)); do
-        tput cup $((LINES / 2 + i)) 0
-        printf "%${COLUMNS}s" ' '
-        ((i++))
-    done
+    draw_menu
+    tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2 - 82 / 2))
+    chafa --polite on --probe off assets/madcat.jpeg
 }
 
 keyboard_input() {
@@ -64,6 +58,7 @@ keyboard_input() {
         q) output='key-quit' ;;
         f) output='key-change-file' ;;
         z) output='key-change-zoom' ;;
+        d) output='key-change-donate' ;;
         esac
 
         if [[ -n $output ]]; then
@@ -83,37 +78,38 @@ event_handler() {
     local kb_pid data_pid
     local shape csv_file location
     local api_zoom virtual_zoom crop_size crop_x crop_y
+    local zoom_value
+
     keyboard_input <&4 &
     kb_pid=$!
+
     echo 'key-change-file' >&3
+
     while true; do
         if IFS='|' read -ra data -t 1 <&3; then
             local event=${data[0]}
             case "$event" in
             key-quit) exit ;;
+            key-donate) xdg-open "$KOFI" 2>/dev/null & ;;
             key-change-file)
-                kill -TSTP $kb_pid
                 kill_handler "$data_pid"
                 get_shape "$kb_pid"
                 echo 'key-change-zoom' >&3
-                clean_half_screen
                 ;;
             key-change-zoom)
-                kill -TSTP $kb_pid
                 kill_handler "$data_pid"
-
-                tput cup $(((LINES + 1) / 2)) $(((COLUMNS - $(echo 'Select a zoom value:' | wc -L)) / 2))
-                printf '%s\n' "Select a zoom value: "
-                read -r api_zoom virtual_zoom crop_size crop_x crop_y <<<"$(zoom_select "$kb_pid")"
-                clean_half_screen
-                draw_menu
-                generate_data "$api_zoom" "$virtual_zoom" "$shape" "$crop_size" "$crop_x" "$crop_y" "$csv_file" "$location" &
-                data_pid=$!
+                zoom_select "$kb_pid"
                 ;;
             selected-shape)
                 shape=${data[1]}
                 csv_file=${data[2]}
                 location=${data[3]}
+                ;;
+            selected-zoom)
+                zoom_value=${data[1]}
+                read -r api_zoom virtual_zoom crop_size crop_x crop_y <<<"$(zoom_calculi "$zoom_value")"
+                generate_data "$api_zoom" "$virtual_zoom" "$shape" "$crop_size" "$crop_x" "$crop_y" "$csv_file" "$location" &
+                data_pid=$!
                 ;;
             esac
         fi
