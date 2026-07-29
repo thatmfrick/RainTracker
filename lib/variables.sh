@@ -5,6 +5,7 @@ WHITE=$'\e[38;5;15m'
 RED=$'\e[38;5;1m'
 SOFT_BLUE=$'\e[38;2;153;195;255m'
 RESET=$'\e[0m'
+KOFI='https://ko-fi.com/thatmfrick/tip'
 MENU=
 
 IFS= read -d '' -r LOGO <<"EOF" || true
@@ -17,7 +18,7 @@ IFS= read -d '' -r LOGO <<"EOF" || true
 EOF
 
 IFS= read -d '' -r MENU_LIST <<EOF || true
-${RED}F${RESET}. Select File
+${RED}F${RESET}. Change file    ${RED}Q${RESET}. Quit
 
-${RED}Z${RESET}. Change Zoom
+${RED}Z${RESET}. Change Zoom    ${RED}D${RESET}. Donate
 EOF
