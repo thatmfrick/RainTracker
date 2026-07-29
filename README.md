@@ -9,7 +9,7 @@ A terminal tool for tracking and visualizing precipitation over a given area, po
 - [ImageMagick](https://imagemagick.org/) — image manipulation
 - [Chafa](https://hpjansson.org/chafa/) — renders images in the terminal
 
-<img width="1110" height="977" alt="RainTracker screenshot" src="https://github.com/user-attachments/assets/2f7e7c76-b024-410c-b303-2cfa17cd92bc" />
+<img width="1107" height="802" alt="RainTracker screenshot" src="https://github.com/user-attachments/assets/a500c951-5ede-4b39-9d84-d46295d24a27" />
 
 ## How it works
 
