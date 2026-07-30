@@ -58,7 +58,7 @@ keyboard_input() {
         q) output='key-quit' ;;
         f) output='key-change-file' ;;
         z) output='key-change-zoom' ;;
-        d) output='key-change-donate' ;;
+        d) output='key-donate' ;;
         esac
 
         if [[ -n $output ]]; then
