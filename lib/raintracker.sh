@@ -47,8 +47,9 @@ get_shape() {
     local csv_dir=config
     local selected_file file_points shape location
     local files=("$csv_dir"/*) max_index
-    local i=0 j=0 k=0 files=("$csv_dir/"*) max="" half_files
-    local half_files=$((${#files[@]} / 2))
+    local i=0 j=0 k=0 files=("$csv_dir/"*) max=""
+    # local half_files
+    # local half_files=$((${#files[@]} / 2))
 
     max_index=$((${#files[@]} - 1))
 
@@ -73,28 +74,30 @@ get_shape() {
 
     for i in "${!files[@]}"; do
         len=${#files[$i]}
-        if ((i <= half_files)); then
+        if ((i <= 15)); then
             ((len > max)) && max=$len
         fi
 
-        if ((i > half_files)); then
+        if ((i > 15)); then
             tput cup $((LINES / 2 - 7 + j)) $(((COLUMNS + 2) / 2 + 4 + max))
-            printf '%s%s\n' "$i. " "${files[$i]}"
+            printf '%s%s\n' "${SOFT_BLUE}$i${RESET}. " "${files[$i]}"
             ((j++))
         else
             tput cup $((LINES / 2 - 7 + i)) $(((COLUMNS + 2) / 2))
-            printf "%s%s\n" "$i. " "${files[$i]}"
+            printf "%s%s\n" "${SOFT_BLUE}$i${RESET}. " "${files[$i]}"
         fi
     done
 
     while true; do
         tput cup $(((LINES - 17) / 2)) $((9 + COLUMNS / 2))
+        printf "%${ans_len}s" ''
         read -r ans
         if [[ "$ans" =~ ^[0-9]+$ ]] && ((ans >= 0 && ans <= max_index)); then
             selected_file="${files[$ans]}"
             file_points=$(wc -l <"$selected_file")
             break
         fi
+        ans_len=$(echo "$ans" | wc -L)
     done
 
     i=0
