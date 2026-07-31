@@ -69,8 +69,31 @@ pixel_coords() {
                 }
             ')
 
-        polygon+="$px,$py "
+        polygon+="$px,$py"$'\n'
     done <"$csv_file"
 
     echo "$polygon"
+}
+
+centroid_radar() {
+    local csv_file="$1"
+    awk -F, '{
+        sum_lat += $1
+        sum_lon += $2
+        count++
+    } END {
+        print sum_lat / count, sum_lon / count
+    }' "$csv_file"
+}
+
+centroid_poly() {
+    local poly="$1"
+
+    awk -F, '{
+        sum_lat += $1
+        sum_lon += $2
+        count++
+    } END {
+        printf "%.0f %.0f", sum_lat / count, sum_lon / count
+    }' <<<"$poly"
 }

@@ -26,20 +26,26 @@ calculate_area_points() {
 }
 
 draw_polygon() {
-    local center_lat="$1" center_lon="$2"
+    local lat="$1" lon="$2"
     local tile_size="$3" zoom="$4" shape="$5"
     local polygon_area_pic="$6" polygon_border_pic="$7"
     local csv_file="$8" polygon=""
+    local poly_centroid_x poly_centroid_y
+    local offset_x offset_y
 
-    polygon="$(pixel_coords "$center_lat" "$center_lon" "$tile_size" "$PICTURE_SIZE" "$zoom" "$csv_file")"
+    polygon="$(pixel_coords "$lat" "$lon" "$tile_size" "$PICTURE_SIZE" "$zoom" "$csv_file")"
+    read -r poly_centroid_x poly_centroid_y <<<"$(centroid_poly "$polygon")"
+
+    offset_x=$((256 - poly_centroid_x))
+    offset_y=$((256 - poly_centroid_y))
 
     magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill none \
         -stroke lime -strokewidth 2 \
-        -draw "$shape $polygon" "$polygon_border_pic"
+        -draw "translate $offset_x,$offset_y $shape $polygon" "$polygon_border_pic"
 
     magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill lime \
         -stroke none -strokewidth 2 \
-        -draw "$shape $polygon" "$polygon_area_pic"
+        -draw "translate $offset_x,$offset_y $shape $polygon" "$polygon_area_pic"
 }
 
 get_shape() {
@@ -146,7 +152,7 @@ zoom_select() {
     while true; do
         tput cup $(((LINES - 14) / 2)) $((9 + COLUMNS / 2))
         read -r value
-        if [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 16)); then
+        if [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 20)); then
             full_zoom=$value
             break
         fi
@@ -167,7 +173,7 @@ generate_data() {
     local crop_size="$4" crop_x="$5" crop_y="$6"
     local csv_file="$7" location="$8"
 
-    local tile_size lat lon
+    local tile_size centroid_lat centroid_lon
     local new_pic_time request_time minutes_diff seconds_diff
     local first_call='true' short_sleep old_pic_time response image_path
     local rainviewer_pic polygon_border_pic polygon_area_pic composite_pic cropped_radar_pic
@@ -181,10 +187,14 @@ generate_data() {
     composite_pic=$(mktemp --suffix=.png)
     cropped_radar_pic=$(mktemp --suffix=.png)
 
-    IFS=, read -r lat lon <"$csv_file"
+    if [[ $shape -eq "polygon" ]]; then
+        read -r centroid_lat centroid_lon <<<"$(centroid_radar "$csv_file")"
+    else
+        IFS=, read -r centroid_lat centroid_lon <"$csv_file"
+    fi
 
     draw_polygon \
-        "$lat" "$lon" "$tile_size" \
+        "$centroid_lat" "$centroid_lon" "$tile_size" \
         "$((zoom + virtual_zoom))" "$shape" \
         "$polygon_area_pic" "$polygon_border_pic" "$csv_file" &
     polygon_pid=$!
@@ -198,7 +208,7 @@ generate_data() {
         seconds_diff=$(((request_time - new_pic_time) % 60)) # same as above but in seconds
 
         if $first_call; then
-            core_fun "$response" "$zoom" "$lat" "$lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid"
+            core_fun "$response" "$zoom" "$centroid_lat" "$centroid_lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid"
             first_call='false'
             short_sleep=$((10 - minutes_diff))
             old_pic_time=$new_pic_time
@@ -207,7 +217,7 @@ generate_data() {
         fi
 
         if ((new_pic_time != old_pic_time)); then # even if 10 minutes have passed it does not guarantee the json is updated
-            core_fun "$response" "$zoom" "$lat" "$lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid"
+            core_fun "$response" "$zoom" "$centroid_lat" "$centroid_lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid"
             old_pic_time=$new_pic_time
             sleep 600
         else # in case json is not updated wait 10 sec and try again
