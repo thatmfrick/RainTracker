@@ -6,6 +6,7 @@ source ./lib/math.sh || exit 1
 source ./lib/variables.sh || exit 1
 
 trap cleanup exit
+trap 'echo resize >&3' SIGWINCH
 
 setup
 event_handler

@@ -31,17 +31,45 @@ connection_status() {
     done
 }
 
+draw_ui() {
+    draw_logo
+    draw_menu
+    tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2 - 82 / 2))
+    chafa --polite on --probe off assets/madcat.jpeg
+}
+
 setup() {
     tput civis
     tput smcup
     stty -echo
     exec 4</dev/tty || fatal 'no terminal detected'
     create_pipe
-    # connection_status
-    draw_logo
-    draw_menu
-    tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2 - 82 / 2))
-    chafa --polite on --probe off assets/madcat.jpeg
+    connection_status
+    draw_ui
+}
+
+resizing() {
+    local cols=$1 lines=$2
+
+    tput clear
+
+    ((cols < MIN_COLS)) && COLS_COLOR="${RED}$cols${RESET}" || COLS_COLOR="${GREEN}$cols${RESET}"
+    ((lines < MIN_LINES)) && LINES_COLOR="${RED}$lines${RESET}" || LINES_COLOR="${GREEN}$lines${RESET}"
+
+    if ((cols >= 30)) && ((lines >= 9)); then
+
+        tput cup $(((lines - 4) / 2)) $(((cols - 24) / 2))
+        printf %s 'Terminal size too small:'
+
+        tput cup $(((lines - 2) / 2)) $(((cols - 22) / 2))
+        echo -e "Width = ${COLS_COLOR} Height = ${LINES_COLOR}"
+
+        tput cup $(((lines + 2) / 2)) $(((cols - 26) / 2))
+        echo -e "Needed for current config:"
+
+        tput cup $(((lines + 4) / 2)) $(((cols - 22) / 2))
+        echo -e "Width = $MIN_COLS Height = $MIN_LINES"
+    fi
 }
 
 keyboard_input() {
@@ -75,7 +103,7 @@ kill_handler() {
 }
 
 event_handler() {
-    local kb_pid data_pid
+    local kb_pid data_pid resize_pid
     local shape csv_file location
     local api_zoom virtual_zoom crop_size crop_x crop_y
     local zoom_value
@@ -110,6 +138,24 @@ event_handler() {
                 read -r api_zoom virtual_zoom crop_size crop_x crop_y <<<"$(zoom_calculi "$zoom_value")"
                 generate_data "$api_zoom" "$virtual_zoom" "$shape" "$crop_size" "$crop_x" "$crop_y" "$csv_file" "$location" &
                 data_pid=$!
+                ;;
+            resize)
+                kill_handler "$data_pid"
+                resizing "$(tput cols)" "$(tput lines)"
+                kill_handler "$resize_pid"
+                (
+                    sleep 1
+                    echo "draw" >&3
+                ) &
+                resize_pid=$!
+                ;;
+            draw)
+                if (($(tput cols) >= MIN_COLS)) && (($(tput lines) >= MIN_LINES)); then
+                    draw_ui
+                    echo 'key-change-file' >&3
+                else
+                    resizing "$(tput cols)" "$(tput lines)"
+                fi
                 ;;
             esac
         fi
