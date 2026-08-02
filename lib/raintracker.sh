@@ -34,10 +34,14 @@ draw_polygon() {
     local offset_x offset_y
 
     polygon="$(pixel_coords "$lat" "$lon" "$tile_size" "$PICTURE_SIZE" "$zoom" "$csv_file")"
-    read -r poly_centroid_x poly_centroid_y <<<"$(centroid_poly "$polygon")"
-
-    offset_x=$((256 - poly_centroid_x))
-    offset_y=$((256 - poly_centroid_y))
+    if [[ $shape = polygon ]]; then
+        read -r poly_centroid_x poly_centroid_y <<<"$(centroid_poly "$polygon")"
+        offset_x=$((256 - poly_centroid_x))
+        offset_y=$((256 - poly_centroid_y))
+    else
+        offset_x=0
+        offset_y=0
+    fi
 
     magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill none \
         -stroke lime -strokewidth 2 \
@@ -97,6 +101,7 @@ get_shape() {
     while true; do
         tput cup $(((LINES - 17) / 2)) $((9 + COLUMNS / 2))
         printf "%${ans_len}s" ''
+        tput cup $(((LINES - 17) / 2)) $((9 + COLUMNS / 2))
         read -r ans
         if [[ "$ans" =~ ^[0-9]+$ ]] && ((ans >= 0 && ans <= max_index)); then
             selected_file="${files[$ans]}"
@@ -187,7 +192,7 @@ generate_data() {
     composite_pic=$(mktemp --suffix=.png)
     cropped_radar_pic=$(mktemp --suffix=.png)
 
-    if [[ $shape -eq "polygon" ]]; then
+    if [[ $shape = polygon ]]; then
         read -r centroid_lat centroid_lon <<<"$(centroid_radar "$csv_file")"
     else
         IFS=, read -r centroid_lat centroid_lon <"$csv_file"
@@ -221,7 +226,7 @@ generate_data() {
             old_pic_time=$new_pic_time
             sleep 600
         else # in case json is not updated wait 10 sec and try again
-            sleep 10
+            sleep 5
         fi
     done
 }
@@ -233,10 +238,8 @@ core_fun() {
     local polygon_border_pic="${11}" polygon_area_pic="${12}" location="${13}"
     local polygon_pid="${14}"
 
-    draw_logo
-    draw_menu
     image_path="$(jq -r '.host + .radar.past[-1].path' <<<"$response")"
-    curl -sf "$image_path/$PICTURE_SIZE/$zoom/$lat/$lon/0/1_1.png" >"$rainviewer_pic"
+    curl -sf "$image_path/$PICTURE_SIZE/$zoom/$lat/$lon/61/1_1.png" >"$rainviewer_pic"
 
     magick \
         "$rainviewer_pic" \
