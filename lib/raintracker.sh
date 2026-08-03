@@ -1,7 +1,52 @@
+open_meteo_data() {
+    local csv_file="$1"
+    local lat lon
+    local open_meteo_json
+    local temperature apparent_temperature humidity
+    local wind_speed wind_direction item precipitation_prob
+
+    read -r lat lon <<<"$(centroid_radar "$csv_file")"
+    open_meteo_json=$(curl -sf "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation_probability&current=temperature_2m,relative_humidity_2m,precipitation,rain,cloud_cover,wind_speed_10m,wind_direction_10m,apparent_temperature&timezone=auto&forecast_days=1")
+
+    temperature=$(jq -r '"\(.current.temperature_2m)\(.current_units.temperature_2m)"' <<<"$open_meteo_json")
+    apparent_temperature=$(jq -r '"\(.current.apparent_temperature)\(.current_units.apparent_temperature)"' <<<"$open_meteo_json")
+    humidity=$(jq -r '"\(.current.relative_humidity_2m)\(.current_units.relative_humidity_2m)"' <<<"$open_meteo_json")
+    wind_speed=$(jq -r '"\(.current.wind_speed_10m)\(.current_units.wind_speed_10m)"' <<<"$open_meteo_json")
+    wind_direction=$(jq -r '"\(.current.wind_direction_10m)\(.current_units.wind_direction_10m)"' <<<"$open_meteo_json")
+    item=$(date +%H)
+    precipitation_prob=$(jq -r --argjson item "$item" '"\(.hourly.precipitation_probability[$item])\(.hourly_units.precipitation_probability)"' <<<"$open_meteo_json")
+
+    i=0
+    while ((i < 13)); do
+        tput cup $((LINES - 9 - i)) $((COLUMNS / 2))
+        printf "%${COLUMNS}s" ' '
+        ((i++))
+    done
+
+    local lines=(
+        "🌡️ Real temperature: $temperature"
+        ""
+        "🌡️ Felt temperature: $apparent_temperature"
+        ""
+        "💧 Humidity: $humidity"
+        ""
+        "🍃 Wind speed: $wind_speed"
+        ""
+        "🧭 Wind direction: $wind_direction"
+        ""
+        "☂️ Precipitation probability: $precipitation_prob"
+    )
+
+    for i in "${!lines[@]}"; do
+        tput cup "$((((LINES + 2) / 2) + i))" $((COLUMNS / 2))
+        echo "${lines[$i]}"
+    done
+}
+
 calculate_area_points() {
     local poly_pic="$1" radar_pic="$2"
     local poly_pixels_color_filtered radar_pixels_color_filtered
-    local final_points count
+    local final_points
 
     poly_pixels_color_filtered=$(mktemp --suffix=.txt)
     radar_pixels_color_filtered=$(mktemp --suffix=.txt)
@@ -11,18 +56,6 @@ calculate_area_points() {
     magick "$radar_pic" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000" {print $1, $3}' >"$radar_pixels_color_filtered"
 
     awk -F': ' 'FNR==NR{color[$1]=$2;next} ($0 in color){print color[$0]}' "$radar_pixels_color_filtered" "$poly_pixels_color_filtered" >"$final_points"
-
-    count=$(wc -l <"$final_points")
-
-    tput cup $((LINES / 2)) $((COLUMNS / 2))
-    printf '%40s' ''
-    if ((count == 0)); then
-        tput cup $((LINES / 2)) $((COLUMNS / 2))
-        echo "No precipitations in the area"
-    else
-        tput cup $((LINES / 2)) $((COLUMNS / 2))
-        echo "Possible precipitations in the area"
-    fi
 }
 
 draw_polygon() {
@@ -213,7 +246,7 @@ generate_data() {
         seconds_diff=$(((request_time - new_pic_time) % 60)) # same as above but in seconds
 
         if $first_call; then
-            core_fun "$response" "$zoom" "$centroid_lat" "$centroid_lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid"
+            core_fun "$response" "$zoom" "$centroid_lat" "$centroid_lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid" "$csv_file"
             first_call='false'
             short_sleep=$((10 - minutes_diff))
             old_pic_time=$new_pic_time
@@ -222,7 +255,7 @@ generate_data() {
         fi
 
         if ((new_pic_time != old_pic_time)); then # even if 10 minutes have passed it does not guarantee the json is updated
-            core_fun "$response" "$zoom" "$centroid_lat" "$centroid_lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid"
+            core_fun "$response" "$zoom" "$centroid_lat" "$centroid_lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid" "$csv_file"
             old_pic_time=$new_pic_time
             sleep 600
         else # in case json is not updated wait 10 sec and try again
@@ -237,6 +270,7 @@ core_fun() {
     local rainviewer_pic="$8" cropped_radar_pic="$9" composite_pic="${10}"
     local polygon_border_pic="${11}" polygon_area_pic="${12}" location="${13}"
     local polygon_pid="${14}"
+    local csv_file="${15}"
 
     image_path="$(jq -r '.host + .radar.past[-1].path' <<<"$response")"
     curl -sf "$image_path/$PICTURE_SIZE/$zoom/$lat/$lon/61/1_1.png" >"$rainviewer_pic"
@@ -262,7 +296,8 @@ core_fun() {
     tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2 - 82 / 2))
     chafa --polite on --probe off "$composite_pic"
 
-    calculate_area_points "$polygon_area_pic" "$cropped_radar_pic"
+    calculate_area_points "$polygon_area_pic" "$cropped_radar_pic" &
+    open_meteo_data "$csv_file" &
 }
 
 draw_logo() {
@@ -281,7 +316,7 @@ draw_logo() {
 draw_menu() {
     local i=0
     while IFS= read -r line; do
-        tput cup $((LINES - 12 + i)) $((COLUMNS / 2))
+        tput cup $((LINES - 7 + i)) $((COLUMNS / 2 - 70 / 2))
         printf %s "$line"
         ((i++))
     done <<<"$MENU_LIST"
