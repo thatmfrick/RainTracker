@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-source ./lib/tui.sh || exit 1
+source ./lib/tui_core.sh || exit 1
+source ./lib/tui_ui.sh || exit 1
 source ./lib/raintracker.sh || exit 1
 source ./lib/math.sh || exit 1
 source ./lib/variables.sh || exit 1

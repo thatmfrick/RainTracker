@@ -2,13 +2,12 @@ open_meteo_data() {
     local csv_file="$1"
     local lat lon
     local open_meteo_json
-    local temperature apparent_temperature humidity
+    local apparent_temperature humidity
     local wind_speed wind_direction item precipitation_prob
 
     read -r lat lon <<<"$(centroid_radar "$csv_file")"
     open_meteo_json=$(curl -sf "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation_probability&current=temperature_2m,relative_humidity_2m,precipitation,rain,cloud_cover,wind_speed_10m,wind_direction_10m,apparent_temperature&timezone=auto&forecast_days=1")
 
-    temperature=$(jq -r '"\(.current.temperature_2m)\(.current_units.temperature_2m)"' <<<"$open_meteo_json")
     apparent_temperature=$(jq -r '"\(.current.apparent_temperature)\(.current_units.apparent_temperature)"' <<<"$open_meteo_json")
     humidity=$(jq -r '"\(.current.relative_humidity_2m)\(.current_units.relative_humidity_2m)"' <<<"$open_meteo_json")
     wind_speed=$(jq -r '"\(.current.wind_speed_10m)\(.current_units.wind_speed_10m)"' <<<"$open_meteo_json")
@@ -24,21 +23,17 @@ open_meteo_data() {
     done
 
     local lines=(
-        "🌡️ Real temperature: $temperature"
+        "🌡️ $apparent_temperature"
         ""
-        "🌡️ Felt temperature: $apparent_temperature"
+        "💧 $humidity"
         ""
-        "💧 Humidity: $humidity"
+        "🌬️ $wind_speed, $wind_direction"
         ""
-        "🍃 Wind speed: $wind_speed"
-        ""
-        "🧭 Wind direction: $wind_direction"
-        ""
-        "☂️ Precipitation probability: $precipitation_prob"
+        "☂️ $precipitation_prob"
     )
 
     for i in "${!lines[@]}"; do
-        tput cup "$((((LINES + 2) / 2) + i))" $((COLUMNS / 2))
+        tput cup "$(((LINES / 2) + i))" $((COLUMNS / 2 + 2))
         echo "${lines[$i]}"
     done
 }
@@ -87,24 +82,16 @@ draw_polygon() {
 
 get_shape() {
     local kb_pid="$1"
-    local csv_dir=config
     local selected_file file_points shape location
-    local files=("$csv_dir"/*) max_index
-    local i=0 j=0 k=0 files=("$csv_dir/"*) max=""
-    # local half_files
-    # local half_files=$((${#files[@]} / 2))
+    local max_index avb_lines
+    local files=()
 
+    files=("config/"*)
     max_index=$((${#files[@]} - 1))
+    avb_lines=$((LINES - (8 * MENU_H + LOGO_H * 3 + 2)))
+    mkdir config 2>/dev/null
 
-    mkdir "$csv_dir" 2>/dev/null
-
-    while ((k < 22)); do
-        tput cup $((LINES - 13 - k)) $((COLUMNS / 2))
-        printf "%${COLUMNS}s" ''
-        ((k++))
-    done
-
-    if [ -z "$(ls -A "$csv_dir" 2>/dev/null)" ]; then
+    if [ -z "$(ls -A config 2>/dev/null)" ]; then
         fatal 'No files to source'
     fi
 
@@ -112,29 +99,12 @@ get_shape() {
     stty echo icanon #all my homies hate icanon
     tput cnorm
 
-    tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2))
-    printf '%s' "📃 File: "
-
-    for i in "${!files[@]}"; do
-        len=${#files[$i]}
-        if ((i <= 15)); then
-            ((len > max)) && max=$len
-        fi
-
-        if ((i > 15)); then
-            tput cup $((LINES / 2 - 7 + j)) $(((COLUMNS + 2) / 2 + 4 + max))
-            printf '%s%s\n' "${SOFT_BLUE}$i${RESET}. " "${files[$i]}"
-            ((j++))
-        else
-            tput cup $((LINES / 2 - 7 + i)) $(((COLUMNS + 2) / 2))
-            printf "%s%s\n" "${SOFT_BLUE}$i${RESET}. " "${files[$i]}"
-        fi
-    done
+    file_prompt
 
     while true; do
-        tput cup $(((LINES - 17) / 2)) $((9 + COLUMNS / 2))
+        tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + FILE_PROMPT_L / 2 - 1))
         printf "%${ans_len}s" ''
-        tput cup $(((LINES - 17) / 2)) $((9 + COLUMNS / 2))
+        tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + FILE_PROMPT_L / 2 - 1))
         read -r ans
         if [[ "$ans" =~ ^[0-9]+$ ]] && ((ans >= 0 && ans <= max_index)); then
             selected_file="${files[$ans]}"
@@ -144,18 +114,13 @@ get_shape() {
         ans_len=$(echo "$ans" | wc -L)
     done
 
-    i=0
-    while ((i < 22)); do
-        tput cup $((LINES - 13 - i)) $((COLUMNS / 2))
-        printf "%${COLUMNS}s" ' '
-        ((i++))
-    done
+    clean_area "$avb_lines" "$COLUMNS" "$((LOGO_H * 3))" 1
 
-    tput cup $(((LINES - 17) / 2)) $((13 + COLUMNS / 2))
-    printf '%20s' ''
-    tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2))
-    printf '%s' "🗺️ Location: "
-    tput cup $(((LINES - 17) / 2)) $((13 + COLUMNS / 2))
+    tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + 5))
+    printf '%30s' ''
+    tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + 2))
+    printf '%s' "📍 "
+    tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + 5))
     read -r location
 
     tput civis
@@ -176,26 +141,30 @@ get_shape() {
 zoom_select() {
     local kb_pid="$1"
     local value full_zoom
+    local var_len=20
 
-    tput cup $(((LINES - 14) / 2)) $((COLUMNS / 2))
-    printf '%s' "🔎 Zoom: "
-
-    tput cup $(((LINES - 14) / 2)) $((9 + COLUMNS / 2))
-    printf '%12s' ''
+    tput cup $((LOGO_H * 3 + 2)) $((COLUMNS / 2 + 2))
+    printf '%s' "🔍 "
 
     kill -TSTP "$kb_pid"
     stty echo icanon
     tput cnorm
 
     while true; do
-        tput cup $(((LINES - 14) / 2)) $((9 + COLUMNS / 2))
+        tput cup $((LOGO_H * 3 + 2)) $((COLUMNS / 2 + 5))
+        printf "%${var_len}s" ''
+
+        tput cup $((LOGO_H * 3 + 2)) $((COLUMNS / 2 + 5))
         read -r value
+
         if [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 20)); then
             full_zoom=$value
             break
         fi
+
         var_len=$(echo "$value" | wc -L)
-        tput cup $(((LINES - 14) / 2)) $((9 + COLUMNS / 2))
+
+        tput cup $((LOGO_H * 3 + 2)) $((COLUMNS / 2 + 5))
         printf "%${var_len}s" ''
     done
 
@@ -293,31 +262,9 @@ core_fun() {
         -draw "rectangle 0,0,$((PICTURE_SIZE - 1)),$((PICTURE_SIZE - 1))" \
         "$composite_pic"
 
-    tput cup $(((LINES - 17) / 2)) $((COLUMNS / 2 - 82 / 2))
+    tput cup $(((LINES - PIC_H) / 2 + 2)) $(((COLUMNS - LOGO_L) / 2))
     chafa --polite on --probe off "$composite_pic"
 
     calculate_area_points "$polygon_area_pic" "$cropped_radar_pic" &
     open_meteo_data "$csv_file" &
-}
-
-draw_logo() {
-    local logo_width=82
-    local logo_height=6
-    local x=$((COLUMNS / 2 - logo_width / 2))
-    local y=$((logo_height + 6))
-
-    while IFS= read -r line; do
-        tput cup $((y - 10)) "$x"
-        echo -n "$line"
-        ((y++))
-    done <<<"$LOGO"
-}
-
-draw_menu() {
-    local i=0
-    while IFS= read -r line; do
-        tput cup $((LINES - 7 + i)) $((COLUMNS / 2 - 70 / 2))
-        printf %s "$line"
-        ((i++))
-    done <<<"$MENU_LIST"
 }
