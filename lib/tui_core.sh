@@ -144,7 +144,7 @@ event_handler() {
                 resizing "$(tput cols)" "$(tput lines)"
                 kill_handler "$resize_pid"
                 (
-                    sleep 1
+                    sleep 0.3
                     echo "draw" >&3
                 ) &
                 resize_pid=$!
