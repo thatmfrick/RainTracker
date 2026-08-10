@@ -3,7 +3,9 @@ open_meteo_data() {
     local lat lon
     local open_meteo_json
     local apparent_temperature humidity
-    local wind_speed wind_direction item precipitation_prob
+    local wind_speed wind_direction
+    local precipitation_mm precipitation_prob cloud_cover
+    local hour
 
     read -r lat lon <<<"$(centroid_radar "$csv_file")"
     open_meteo_json=$(curl -sf "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation_probability&current=temperature_2m,relative_humidity_2m,precipitation,rain,cloud_cover,wind_speed_10m,wind_direction_10m,apparent_temperature&timezone=auto&forecast_days=1")
@@ -12,11 +14,13 @@ open_meteo_data() {
     humidity=$(jq -r '"\(.current.relative_humidity_2m)\(.current_units.relative_humidity_2m)"' <<<"$open_meteo_json")
     wind_speed=$(jq -r '"\(.current.wind_speed_10m)\(.current_units.wind_speed_10m)"' <<<"$open_meteo_json")
     wind_direction=$(jq -r '"\(.current.wind_direction_10m)\(.current_units.wind_direction_10m)"' <<<"$open_meteo_json")
-    item=$(date +%H)
-    precipitation_prob=$(jq -r --argjson item "$item" '"\(.hourly.precipitation_probability[$item])\(.hourly_units.precipitation_probability)"' <<<"$open_meteo_json")
+    hour=$(date +%H)
+    precipitation_prob=$(jq -r --argjson hour "$hour" '"\(.hourly.precipitation_probability[$hour])\(.hourly_units.precipitation_probability)"' <<<"$open_meteo_json")
+    precipitation_mm=$(jq -r '"\(.current.precipitation)\(.current_units.precipitation)"' <<<"$open_meteo_json")
+    cloud_cover=$(jq -r '"\(.current.cloud_cover)\(.current_units.cloud_cover)"' <<<"$open_meteo_json")
 
     i=0
-    while ((i < 13)); do
+    while ((i < 15)); do
         tput cup $((LINES - 9 - i)) $((COLUMNS / 2))
         printf "%${COLUMNS}s" ' '
         ((i++))
@@ -29,7 +33,11 @@ open_meteo_data() {
         ""
         "🌬️ $wind_speed, $wind_direction"
         ""
-        "☂️ $precipitation_prob"
+        "☔ $precipitation_prob"
+        ""
+        "💦 $precipitation_mm"
+        ""
+        "☁️ $cloud_cover"
     )
 
     for i in "${!lines[@]}"; do
@@ -116,11 +124,11 @@ get_shape() {
 
     clean_area "$avb_lines" "$COLUMNS" "$((LOGO_H * 3))" 1
 
-    tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + 5))
+    tput cup $(((LINES - PIC_H) / 2 + 2)) $((COLUMNS / 2 + 5))
     printf '%30s' ''
-    tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + 2))
+    tput cup $(((LINES - PIC_H) / 2 + 2)) $((COLUMNS / 2 + 2))
     printf '%s' "📍 "
-    tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + 5))
+    tput cup $(((LINES - PIC_H) / 2 + 2)) $((COLUMNS / 2 + 5))
     read -r location
 
     tput civis
@@ -143,7 +151,7 @@ zoom_select() {
     local value full_zoom
     local var_len=20
 
-    tput cup $((LOGO_H * 3 + 2)) $((COLUMNS / 2 + 2))
+    tput cup $(((LINES - PIC_H) / 2 + 4)) $((COLUMNS / 2 + 2))
     printf '%s' "🔍 "
 
     kill -TSTP "$kb_pid"
@@ -151,10 +159,10 @@ zoom_select() {
     tput cnorm
 
     while true; do
-        tput cup $((LOGO_H * 3 + 2)) $((COLUMNS / 2 + 5))
+        tput cup $(((LINES - PIC_H) / 2 + 4)) $((COLUMNS / 2 + 5))
         printf "%${var_len}s" ''
 
-        tput cup $((LOGO_H * 3 + 2)) $((COLUMNS / 2 + 5))
+        tput cup $(((LINES - PIC_H) / 2 + 4)) $((COLUMNS / 2 + 5))
         read -r value
 
         if [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 20)); then
@@ -164,7 +172,7 @@ zoom_select() {
 
         var_len=$(echo "$value" | wc -L)
 
-        tput cup $((LOGO_H * 3 + 2)) $((COLUMNS / 2 + 5))
+        tput cup $(((LINES - PIC_H) / 2 + 4)) $((COLUMNS / 2 + 5))
         printf "%${var_len}s" ''
     done
 
