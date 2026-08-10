@@ -1,15 +1,15 @@
 # RainTracker
 
-A terminal tool for tracking and visualizing precipitation over a given area, powered by:
+- A terminal tool for tracking and visualizing precipitation and weather data over a given area.
+- Fully written in Bash with the help of:
+  - [RainViewer API](https://www.rainviewer.com/) — fetches precipitation heat maps
+  - [Open-Meteo](https://open-meteo.com/) - weather data
+  - [jq](https://jqlang.org/) — queries RainViewer's and Open-Meteo's JSON responses
+  - [awk](https://docs.rockylinux.org/10/books/sed_awk_grep/4_awk_command/) — math calculations
+  - [ImageMagick](https://imagemagick.org/) — image manipulation
+  - [Chafa](https://hpjansson.org/chafa/) — renders images in the terminal
 
-- [Bash](https://www.gnu.org/savannah-checkouts/gnu/bash/manual/bash.html) — Dave Eddy's fault
-- [RainViewer API](https://www.rainviewer.com/) — fetches precipitation heat maps
-- [jq](https://jqlang.org/) — queries RainViewer's JSON responses
-- [awk](https://docs.rockylinux.org/10/books/sed_awk_grep/4_awk_command/) — math calculations
-- [ImageMagick](https://imagemagick.org/) — image manipulation
-- [Chafa](https://hpjansson.org/chafa/) — renders images in the terminal
-
-<img width="1107" height="802" alt="RainTracker screenshot" src="https://github.com/user-attachments/assets/a500c951-5ede-4b39-9d84-d46295d24a27" />
+<img width="1920" height="1080" alt="RainTracker gif" src="https://github.com/user-attachments/assets/4625bdf4-76d2-436a-8125-015ad8ccf828" />
 
 ## How it works
 
@@ -17,6 +17,8 @@ RainViewer's API caps out at zoom level 7 with 512px tiles. RainTracker layers s
 
 - A **virtual zoom** level beyond RainViewer's native cap
 - The ability to draw a scaled area on the map from a simple `.csv` file of `lat,lon` coordinates
+
+- The API refreshes radar images every 10 minutes.
 
 ### Usage flow
 
@@ -35,8 +37,8 @@ When run, the program prompts for:
 
 ## To-do
 
-- [ ] Advanced pixel analysis of the selected area for richer info
+- [ ] Advanced weather analysis
 - [ ] Render a base map beneath the precipitation overlay
-- [ ] Polish the TUI (UI & UX)
+- [ ] Add logging
 - [ ] Containerize the program
 - [ ] Add a non-TUI mode (logging only)
