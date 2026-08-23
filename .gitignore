@@ -1,3 +1,4 @@
+.cache/
 test/
 config/BDZ.csv
 config/LSP.csv
