@@ -4,10 +4,15 @@ source ./lib/tui_core.sh || exit 1
 source ./lib/tui_ui.sh || exit 1
 source ./lib/raintracker.sh || exit 1
 source ./lib/math.sh || exit 1
+source ./lib/api/Open-Meteo.sh || exit 1
+source ./lib/api/OpenStreetMap.sh || exit 1
+source ./lib/api/RainViewer.sh || exit 1
 source ./lib/variables.sh || exit 1
+source ./lib/check.sh || exit 1
 
 trap cleanup exit
 trap 'echo resize >&3' SIGWINCH
 
 setup
+keyboard_input <&4 &
 event_handler
