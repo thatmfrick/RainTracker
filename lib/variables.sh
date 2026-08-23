@@ -2,13 +2,14 @@
 
 RAINVIEWER_API='https://api.rainviewer.com/public/weather-maps.json'
 PICTURE_SIZE=512
+TILE_SIZE=256
 MIN_LINES=42
 MIN_COLS=90
 PIC_L=40
 PIC_H=22
 LOGO_L=75
 LOGO_H=4
-MENU_L=56
+MENU_L=20
 MENU_H=1
 
 GREEN=$'\e[38;5;2m'
@@ -21,4 +22,15 @@ KOFI='https://ko-fi.com/thatmfrick/tip'
 FILE_PROMPT="📄 Select a file: "
 FILE_PROMPT_L=$(echo "$FILE_PROMPT" | wc -L)
 
-MENU_LIST="${RED}F${RESET}. Change file    ${RED}Z${RESET}. Change Zoom    ${RED}D${RESET}. Donate    ${RED}Q${RESET}. Quit"
+MENU_LIST="${RED}K${RESET}. Donate    ${RED}Q${RESET}. Quit"
+
+RAINVIEWER_PIC=$(mktemp --suffix=.png)
+POLYGON_BORDER_PIC=$(mktemp --suffix=.png)
+POLYGON_AREA_PIC=$(mktemp --suffix=.png)
+COMPOSITE_PIC=$(mktemp --suffix=.png)
+CROPPED_RADAR_PIC=$(mktemp --suffix=.png)
+MAP_PIC=$(mktemp --suffix=.png)
+
+CSV_FOLDER="$(pwd)/config"
+BUSY_LOCK="/tmp/$RANDOM$RANDOM.$$"
+CACHE_DIR="$(pwd)/.chache"
