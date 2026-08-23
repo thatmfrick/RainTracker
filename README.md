@@ -3,9 +3,9 @@
 - A terminal tool for tracking and visualizing precipitation and weather data over a given area.
 - Fully written in Bash with the help of:
   - [RainViewer API](https://www.rainviewer.com/) — fetches precipitation heat maps
-  - [Open-Meteo](https://open-meteo.com/) - weather data
-  - [OpenStreetMap-Tiles](https://operations.osmfoundation.org/policies/tiles/)) - tile fetching for background map
-  - [Nominatim](https://nominatim.org/release-docs/develop/) - reverse location search
+  - [Open-Meteo](https://open-meteo.com/) — weather data
+  - [OpenStreetMap-Tiles](https://operations.osmfoundation.org/policies/tiles/)) — tile fetching for background map
+  - [Nominatim](https://nominatim.org/release-docs/develop/) — reverse location search
   - [jq](https://jqlang.org/) — queries RainViewer's and Open-Meteo's JSON responses
   - [awk](https://docs.rockylinux.org/10/books/sed_awk_grep/4_awk_command/) — math calculations
   - [ImageMagick](https://imagemagick.org/) — image manipulation
