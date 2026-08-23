@@ -19,18 +19,6 @@ cleanup() {
     stty echo 2>/dev/null
 }
 
-connection_status() {
-    local attempts=0
-    local max_attempts=5
-    until curl -sf --max-time 5 "$RAINVIEWER_API" &>/dev/null; do
-        ((attempts++))
-        if ((attempts >= max_attempts)); then
-            fatal "No connection"
-        fi
-        sleep 2
-    done
-}
-
 draw_ui() {
     draw_logo
     draw_menu
@@ -42,8 +30,8 @@ setup() {
     stty -echo
     exec 4</dev/tty || fatal 'no terminal detected'
     create_pipe
-    connection_status
-    draw_ui
+    check_connection_status
+    echo draw >&3
 }
 
 resizing() {
@@ -81,10 +69,13 @@ keyboard_input() {
 
         local output=
         case "$data" in
+        'w' | 'W' | '[A') output='key-zoom-in' ;;
+        's' | 'S' | '[B') output='key-zoom-out' ;;
+        'a' | 'A' | '[D') output='key-file-prev' ;;
+        'd' | 'D' | '[C') output='key-file-next' ;;
+        '') output='key-enter' ;;
         q) output='key-quit' ;;
-        f) output='key-change-file' ;;
-        z) output='key-change-zoom' ;;
-        d) output='key-donate' ;;
+        k) output='key-donate' ;;
         esac
 
         if [[ -n $output ]]; then
@@ -94,53 +85,82 @@ keyboard_input() {
 }
 
 kill_handler() {
-    local PID="$1"
-    kill "$PID" 2>/dev/null
-    pkill -P "$PID" 2>/dev/null
-    wait "$PID" 2>/dev/null
+    for item in "$@"; do
+        kill "$item" 2>/dev/null
+        pkill -P "$item" 2>/dev/null
+        wait "$item" 2>/dev/null
+    done
 }
 
 event_handler() {
-    local kb_pid data_pid resize_pid
-    local shape csv_file location
-    local api_zoom virtual_zoom crop_size crop_x crop_y
-    local zoom_value
-
-    keyboard_input <&4 &
-    kb_pid=$!
-
-    echo 'key-change-file' >&3
+    local csv_file
+    local api_zoom virtual_zoom
+    local file_index=0 zoom=9 debounce=0
+    local data_pid resize_pid open_meteo_pid debounce_pid
 
     while true; do
-        if IFS='|' read -ra data -t 1 <&3; then
+        if IFS='|' read -ra data -t 1 <&3 && [[ ! -f "$BUSY_LOCK" ]]; then
             local event=${data[0]}
             case "$event" in
             key-quit) exit ;;
             key-donate) xdg-open "$KOFI" 2>/dev/null & ;;
-            key-change-file)
-                kill_handler "$data_pid"
-                tput clear
+            key-start)
                 draw_ui
-                get_shape "$kb_pid"
-                echo 'key-change-zoom' >&3
+                check_file_index "$file_index"
+                check_zoom "$zoom"
                 ;;
-            key-change-zoom)
+            key-zoom-in)
                 kill_handler "$data_pid"
-                zoom_select "$kb_pid"
+                ((zoom++))
+                check_zoom "$zoom"
                 ;;
-            selected-shape)
-                shape=${data[1]}
-                csv_file=${data[2]}
-                location=${data[3]}
+            key-zoom-out)
+                kill_handler "$data_pid"
+                ((zoom--))
+                check_zoom "$zoom"
+                ;;
+            key-file-next)
+                kill_handler "$data_pid" "$open_meteo_pid" "$debounce_pid"
+                ((file_index++))
+                check_file_index "$file_index"
+                ;;
+            key-file-prev)
+                kill_handler "$data_pid" "$open_meteo_pid" "$debounce_pid"
+                ((file_index--))
+                check_file_index "$file_index"
+                ;;
+            selected-file)
+                csv_file=${data[1]}
+                file_index=${data[2]}
+                print_location "$csv_file"
+                debounce=0.5
+                sleep $debounce &
+                debounce_pid=$!
+                trap 'kill "$debounce_pid" 2>/dev/null' USR1
+                wait "$debounce_pid" 2>/dev/null
+                debounce_status=$?
+                trap - USR1
+
+                if ((debounce_status != 0)); then
+                    continue
+                fi
+
+                generate_weather_data "$csv_file" &
+                open_meteo_pid=$!
+                check_zoom "$zoom"
                 ;;
             selected-zoom)
-                zoom_value=${data[1]}
-                read -r api_zoom virtual_zoom crop_size crop_x crop_y <<<"$(zoom_calculi "$zoom_value")"
-                generate_data "$api_zoom" "$virtual_zoom" "$shape" "$crop_size" "$crop_x" "$crop_y" "$csv_file" "$location" &
+                zoom=${data[1]}
+                api_zoom=${data[2]}
+                virtual_zoom=${data[3]}
+
+                touch "$BUSY_LOCK"
+                core_fun "$api_zoom" "$virtual_zoom" "$csv_file" &
                 data_pid=$!
                 ;;
             resize)
                 kill_handler "$data_pid"
+                kill_handler "$open_meteo_pid"
                 resizing "$(tput cols)" "$(tput lines)"
                 kill_handler "$resize_pid"
                 (
@@ -151,8 +171,7 @@ event_handler() {
                 ;;
             draw)
                 if (($(tput cols) >= MIN_COLS)) && (($(tput lines) >= MIN_LINES)); then
-                    draw_ui
-                    echo 'key-change-file' >&3
+                    echo 'key-start' >&3
                 else
                     resizing "$(tput cols)" "$(tput lines)"
                 fi
