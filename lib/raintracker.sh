@@ -1,278 +1,83 @@
-open_meteo_data() {
-    local csv_file="$1"
-    local lat lon
-    local open_meteo_json
-    local apparent_temperature humidity
-    local wind_speed wind_direction
-    local precipitation_mm precipitation_prob cloud_cover
-    local hour
-
-    read -r lat lon <<<"$(centroid_radar "$csv_file")"
-    open_meteo_json=$(curl -sf "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=precipitation_probability&current=temperature_2m,relative_humidity_2m,precipitation,rain,cloud_cover,wind_speed_10m,wind_direction_10m,apparent_temperature&timezone=auto&forecast_days=1")
-
-    apparent_temperature=$(jq -r '"\(.current.apparent_temperature)\(.current_units.apparent_temperature)"' <<<"$open_meteo_json")
-    humidity=$(jq -r '"\(.current.relative_humidity_2m)\(.current_units.relative_humidity_2m)"' <<<"$open_meteo_json")
-    wind_speed=$(jq -r '"\(.current.wind_speed_10m)\(.current_units.wind_speed_10m)"' <<<"$open_meteo_json")
-    wind_direction=$(jq -r '"\(.current.wind_direction_10m)\(.current_units.wind_direction_10m)"' <<<"$open_meteo_json")
-    hour=$(date +%H)
-    precipitation_prob=$(jq -r --argjson hour "$hour" '"\(.hourly.precipitation_probability[$hour])\(.hourly_units.precipitation_probability)"' <<<"$open_meteo_json")
-    precipitation_mm=$(jq -r '"\(.current.precipitation)\(.current_units.precipitation)"' <<<"$open_meteo_json")
-    cloud_cover=$(jq -r '"\(.current.cloud_cover)\(.current_units.cloud_cover)"' <<<"$open_meteo_json")
-
-    i=0
-    while ((i < 15)); do
-        tput cup $((LINES - 9 - i)) $((COLUMNS / 2))
-        printf "%${COLUMNS}s" ' '
-        ((i++))
-    done
-
-    local lines=(
-        "🌡️ $apparent_temperature"
-        ""
-        "💧 $humidity"
-        ""
-        "🌬️ $wind_speed, $wind_direction"
-        ""
-        "☔ $precipitation_prob"
-        ""
-        "💦 $precipitation_mm"
-        ""
-        "☁️ $cloud_cover"
-    )
-
-    for i in "${!lines[@]}"; do
-        tput cup "$(((LINES / 2) + i))" $((COLUMNS / 2 + 2))
-        echo "${lines[$i]}"
-    done
-}
-
-calculate_area_points() {
-    local poly_pic="$1" radar_pic="$2"
-    local poly_pixels_color_filtered radar_pixels_color_filtered
-    local final_points
-
-    poly_pixels_color_filtered=$(mktemp --suffix=.txt)
-    radar_pixels_color_filtered=$(mktemp --suffix=.txt)
-    final_points=$(mktemp --suffix=.txt)
-
-    magick "$poly_pic" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000"' | cut -d: -f1 >"$poly_pixels_color_filtered"
-    magick "$radar_pic" -depth 8 txt:- | tail -n +2 | awk '$3 != "#00000000" {print $1, $3}' >"$radar_pixels_color_filtered"
-
-    awk -F': ' 'FNR==NR{color[$1]=$2;next} ($0 in color){print color[$0]}' "$radar_pixels_color_filtered" "$poly_pixels_color_filtered" >"$final_points"
-}
-
 draw_polygon() {
-    local lat="$1" lon="$2"
-    local tile_size="$3" zoom="$4" shape="$5"
-    local polygon_area_pic="$6" polygon_border_pic="$7"
-    local csv_file="$8" polygon=""
-    local poly_centroid_x poly_centroid_y
-    local offset_x offset_y
+    local c_lat="$1" c_lon="$2"
+    local full_zoom="$3" csv_file="$4"
 
-    polygon="$(pixel_coords "$lat" "$lon" "$tile_size" "$PICTURE_SIZE" "$zoom" "$csv_file")"
-    if [[ $shape = polygon ]]; then
-        read -r poly_centroid_x poly_centroid_y <<<"$(centroid_poly "$polygon")"
-        offset_x=$((256 - poly_centroid_x))
-        offset_y=$((256 - poly_centroid_y))
-    else
-        offset_x=0
-        offset_y=0
-    fi
+    local c_px c_py
+    local polygon=""
+
+    read -r c_px c_py <<<"$(latlon_to_pixel "$c_lat" "$c_lon" "$full_zoom")"
+    polygon="$(pixel_coords "$c_px" "$c_py" "$full_zoom" "$csv_file")"
 
     magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill none \
-        -stroke lime -strokewidth 2 \
-        -draw "translate $offset_x,$offset_y $shape $polygon" "$polygon_border_pic"
-
-    magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill lime \
-        -stroke none -strokewidth 2 \
-        -draw "translate $offset_x,$offset_y $shape $polygon" "$polygon_area_pic"
+        -stroke black -strokewidth 2 \
+        -draw "polygon $polygon" "$POLYGON_BORDER_PIC"
 }
 
-get_shape() {
-    local kb_pid="$1"
-    local selected_file file_points shape location
-    local max_index avb_lines
-    local files=()
+calculate_centroid() {
+    local csv_file="$1"
 
-    files=("config/"*)
-    max_index=$((${#files[@]} - 1))
-    avb_lines=$((LINES - (8 * MENU_H + LOGO_H * 3 + 2)))
-    mkdir config 2>/dev/null
+    local c_lat c_lon
 
-    if [ -z "$(ls -A config 2>/dev/null)" ]; then
-        fatal 'No files to source'
-    fi
-
-    kill -TSTP "$kb_pid"
-    stty echo icanon #all my homies hate icanon
-    tput cnorm
-
-    file_prompt
-
-    while true; do
-        tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + FILE_PROMPT_L / 2 - 1))
-        printf "%${ans_len}s" ''
-        tput cup $((LOGO_H * 3)) $((COLUMNS / 2 + FILE_PROMPT_L / 2 - 1))
-        read -r ans
-        if [[ "$ans" =~ ^[0-9]+$ ]] && ((ans >= 0 && ans <= max_index)); then
-            selected_file="${files[$ans]}"
-            file_points=$(wc -l <"$selected_file")
-            break
-        fi
-        ans_len=$(echo "$ans" | wc -L)
-    done
-
-    clean_area "$avb_lines" "$COLUMNS" "$((LOGO_H * 3))" 1
-
-    tput cup $(((LINES - PIC_H) / 2 + 2)) $((COLUMNS / 2 + 5))
-    printf '%30s' ''
-    tput cup $(((LINES - PIC_H) / 2 + 2)) $((COLUMNS / 2 + 2))
-    printf '%s' "📍 "
-    tput cup $(((LINES - PIC_H) / 2 + 2)) $((COLUMNS / 2 + 5))
-    read -r location
-
-    tput civis
-    stty -echo -icanon
-    kill -CONT "$kb_pid"
-
-    if ((file_points > 2)); then
-        shape='polygon'
-    elif ((file_points == 2)); then
-        shape='circle'
+    if (($(wc -l <"$csv_file") > 2)); then
+        read -r c_lat c_lon <<<"$(centroid_radar "$csv_file")"
     else
-        fatal "You need at least 2 poins"
+        fatal "Not enough points"
     fi
 
-    echo "selected-shape|$shape|$selected_file|$location" >&3
+    echo "$c_lat" "$c_lon"
 }
 
-zoom_select() {
-    local kb_pid="$1"
-    local value full_zoom
-    local var_len=20
-
-    tput cup $(((LINES - PIC_H) / 2 + 4)) $((COLUMNS / 2 + 2))
-    printf '%s' "🔍 "
-
-    kill -TSTP "$kb_pid"
-    stty echo icanon
-    tput cnorm
-
+generate_weather_data() {
+    local csv_file="$1"
     while true; do
-        tput cup $(((LINES - PIC_H) / 2 + 4)) $((COLUMNS / 2 + 5))
-        printf "%${var_len}s" ''
-
-        tput cup $(((LINES - PIC_H) / 2 + 4)) $((COLUMNS / 2 + 5))
-        read -r value
-
-        if [[ "$value" =~ ^[0-9]+$ ]] && ((value >= 1 && value <= 20)); then
-            full_zoom=$value
-            break
-        fi
-
-        var_len=$(echo "$value" | wc -L)
-
-        tput cup $(((LINES - PIC_H) / 2 + 4)) $((COLUMNS / 2 + 5))
-        printf "%${var_len}s" ''
-    done
-
-    tput civis
-    stty -echo -icanon
-    kill -CONT "$kb_pid"
-
-    echo "selected-zoom|$full_zoom" >&3
-}
-
-generate_data() {
-    local zoom="$1" virtual_zoom="$2" shape="$3"
-    local crop_size="$4" crop_x="$5" crop_y="$6"
-    local csv_file="$7" location="$8"
-
-    local tile_size centroid_lat centroid_lon
-    local new_pic_time request_time minutes_diff seconds_diff
-    local first_call='true' short_sleep old_pic_time response image_path
-    local rainviewer_pic polygon_border_pic polygon_area_pic composite_pic cropped_radar_pic
-    local polygon_pid
-
-    tile_size=$PICTURE_SIZE
-
-    rainviewer_pic=$(mktemp --suffix=.png)
-    polygon_border_pic=$(mktemp --suffix=.png)
-    polygon_area_pic=$(mktemp --suffix=.png)
-    composite_pic=$(mktemp --suffix=.png)
-    cropped_radar_pic=$(mktemp --suffix=.png)
-
-    if [[ $shape = polygon ]]; then
-        read -r centroid_lat centroid_lon <<<"$(centroid_radar "$csv_file")"
-    else
-        IFS=, read -r centroid_lat centroid_lon <"$csv_file"
-    fi
-
-    draw_polygon \
-        "$centroid_lat" "$centroid_lon" "$tile_size" \
-        "$((zoom + virtual_zoom))" "$shape" \
-        "$polygon_area_pic" "$polygon_border_pic" "$csv_file" &
-    polygon_pid=$!
-
-    while true; do
-        response=$(curl -sf "$RAINVIEWER_API")
-        new_pic_time=$(jq -r '.radar.past[-1].time' <<<"$response") # last picture timestamp
-        request_time=$(date +%s)                                    # time when the request was made
-        # generated_time=$(jq -r '.generated' <<<"$response")         # time when the request was made
-        minutes_diff=$(((request_time - new_pic_time) / 60)) # time passed between the request and last radar update
-        seconds_diff=$(((request_time - new_pic_time) % 60)) # same as above but in seconds
-
-        if $first_call; then
-            core_fun "$response" "$zoom" "$centroid_lat" "$centroid_lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid" "$csv_file"
-            first_call='false'
-            short_sleep=$((10 - minutes_diff))
-            old_pic_time=$new_pic_time
-            sleep "${short_sleep}m" "${seconds_diff}s"
-            continue
-        fi
-
-        if ((new_pic_time != old_pic_time)); then # even if 10 minutes have passed it does not guarantee the json is updated
-            core_fun "$response" "$zoom" "$centroid_lat" "$centroid_lon" "$crop_size" "$crop_x" "$crop_y" "$rainviewer_pic" "$cropped_radar_pic" "$composite_pic" "$polygon_border_pic" "$polygon_area_pic" "$location" "$polygon_pid" "$csv_file"
-            old_pic_time=$new_pic_time
-            sleep 600
-        else # in case json is not updated wait 10 sec and try again
-            sleep 5
-        fi
+        openmeteo_data "$csv_file"
+        sleep 300
     done
 }
 
 core_fun() {
-    local response="$1" zoom="$2" lat="$3" lon="$4"
-    local crop_size="$5" crop_x="$6" crop_y="$7"
-    local rainviewer_pic="$8" cropped_radar_pic="$9" composite_pic="${10}"
-    local polygon_border_pic="${11}" polygon_area_pic="${12}" location="${13}"
-    local polygon_pid="${14}"
-    local csv_file="${15}"
+    local api_zoom="$1" virtual_zoom="$2"
+    local csv_file="$3"
 
-    image_path="$(jq -r '.host + .radar.past[-1].path' <<<"$response")"
-    curl -sf "$image_path/$PICTURE_SIZE/$zoom/$lat/$lon/61/1_1.png" >"$rainviewer_pic"
+    local api_response current_pic last_pic
+    local poly_pid map_pid
 
-    magick \
-        "$rainviewer_pic" \
-        -crop "${crop_size}x${crop_size}+${crop_x}+${crop_y}" \
-        +repage \
-        -filter point \
-        -resize "${PICTURE_SIZE}x${PICTURE_SIZE}" \
-        "$cropped_radar_pic"
+    local full_zoom
+    full_zoom=$((api_zoom + virtual_zoom))
 
-    wait "$polygon_pid"
+    local c_lat c_lon
+    read -r c_lat c_lon <<<"$(calculate_centroid "$csv_file")"
 
-    magick \
-        -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:black \
-        "$cropped_radar_pic" -composite \
-        "$polygon_border_pic" -composite \
-        -fill none -stroke white -strokewidth 2 \
-        -draw "rectangle 0,0,$((PICTURE_SIZE - 1)),$((PICTURE_SIZE - 1))" \
-        "$composite_pic"
+    draw_polygon "$c_lat" "$c_lon" "$full_zoom" "$csv_file" &
+    poly_pid=$!
 
-    tput cup $(((LINES - PIC_H) / 2 + 2)) $(((COLUMNS - LOGO_L) / 2))
-    chafa --polite on --probe off "$composite_pic"
+    generate_map "$c_lat" "$c_lon" "$full_zoom" &
+    map_pid=$!
 
-    calculate_area_points "$polygon_area_pic" "$cropped_radar_pic" &
-    open_meteo_data "$csv_file" &
+    while true; do
+        api_response=$(curl -sf "$RAINVIEWER_API")
+        current_pic=$(last_radar_time "$api_response")
+        if ((current_pic != last_pic)); then
+            generate_radar_pic "$c_lat" "$c_lon" "$api_zoom" "$virtual_zoom" "$api_response"
+            wait "$poly_pid" "$map_pid" 2>/dev/null
+
+            magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" \
+                xc:none "$MAP_PIC" -composite \
+                "$CROPPED_RADAR_PIC" -compose dissolve -define compose:args=80 -composite \
+                -compose over "$POLYGON_BORDER_PIC" -composite \
+                assets/NESW.png -composite \
+                "$COMPOSITE_PIC" 2>/dev/null
+
+            tput cup $(((LINES - PIC_H) / 2 + 2)) $(((COLUMNS - LOGO_L) / 2))
+            chafa --polite on --probe off "$COMPOSITE_PIC"
+            rm -f "$BUSY_LOCK" 2>/dev/null
+
+            read -r min sec <<<"$(radar_sleep_time "$api_response")"
+            sleep "$min" "$sec"
+        else
+            sleep 3
+            continue
+        fi
+        last_pic=$current_pic
+    done
 }
