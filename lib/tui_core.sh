@@ -95,7 +95,7 @@ kill_handler() {
 event_handler() {
     local csv_file
     local api_zoom virtual_zoom
-    local file_index=0 zoom=9 debounce=0
+    local file_index=0 zoom=6 debounce=0
     local data_pid resize_pid open_meteo_pid debounce_pid
 
     while true; do
@@ -159,8 +159,7 @@ event_handler() {
                 data_pid=$!
                 ;;
             resize)
-                kill_handler "$data_pid"
-                kill_handler "$open_meteo_pid"
+                kill_handler "$data_pid" "$open_meteo_pid"
                 resizing "$(tput cols)" "$(tput lines)"
                 kill_handler "$resize_pid"
                 (

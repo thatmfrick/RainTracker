@@ -13,20 +13,6 @@ draw_polygon() {
         -draw "polygon $polygon" "$POLYGON_BORDER_PIC"
 }
 
-calculate_centroid() {
-    local csv_file="$1"
-
-    local c_lat c_lon
-
-    if (($(wc -l <"$csv_file") > 2)); then
-        read -r c_lat c_lon <<<"$(centroid_radar "$csv_file")"
-    else
-        fatal "Not enough points"
-    fi
-
-    echo "$c_lat" "$c_lon"
-}
-
 generate_weather_data() {
     local csv_file="$1"
     while true; do

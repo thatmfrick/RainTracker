@@ -15,8 +15,8 @@ check_zoom() {
 
     if ((zoom > 17)); then
         zoom=17
-    elif ((zoom < 0)); then
-        zoom=0
+    elif ((zoom < 2)); then
+        zoom=2
     fi
 
     if ((zoom > 7)); then

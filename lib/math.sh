@@ -44,6 +44,7 @@ latlon_to_tile() {
 
 latlon_to_pixel() {
     local lat="$1" lon="$2" zoom="$3"
+
     awk -v lat="$lat" -v lon="$lon" \
         -v tile_size="$TILE_SIZE" -v zoom="$zoom" '
         function tan(x) { return sin(x) / cos(x) }
@@ -97,14 +98,29 @@ pixel_coords() {
 }
 
 # Will return the centered lat,lon point of the relative shape
-centroid_radar() {
+calculate_centroid() {
     local csv_file="$1"
 
-    awk -F, '{
-        sum_lat += $1
-        sum_lon += $2
-        count++
-    } END {
-        print sum_lat / count, sum_lon / count
+    awk -F, '
+    {
+        lat[NR] = $1
+        lon[NR] = $2
+        n = NR
+        # NR is number of records that auto increments
+    }
+    END {
+        for (i = 1; i <= n; i++) {
+            j = (i % n) + 1
+            cross = lat[i]*lon[j] - lat[j]*lon[i]
+            sum_a  += cross
+            sum_clat += (lat[i] + lat[j]) * cross
+            sum_clon += (lon[i] + lon[j]) * cross
+        }
+        A = sum_a / 2
+        if (A == 0) {
+            print "0 0"
+            exit
+        }
+        print sum_clat / (6*A), sum_clon / (6*A)
     }' "$csv_file"
 }

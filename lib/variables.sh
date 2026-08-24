@@ -33,4 +33,4 @@ MAP_PIC=$(mktemp --suffix=.png)
 
 CSV_FOLDER="$(pwd)/config"
 BUSY_LOCK="/tmp/$RANDOM$RANDOM.$$"
-CACHE_DIR="$(pwd)/.chache"
+CACHE_DIR="$(pwd)/.cache"

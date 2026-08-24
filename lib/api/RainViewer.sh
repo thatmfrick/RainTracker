@@ -24,20 +24,42 @@ generate_radar_pic() {
     local api_zoom="$3" virtual_zoom="$4"
     local response="$5"
 
-    local image_path
-
-    image_path="$(jq -r '.host + .radar.past[-1].path' <<<"$response")"
-
     local crop_size crop_L crop_T
-
     read -r crop_size crop_L crop_T <<<"$(zoom_calculi "$virtual_zoom")"
 
-    curl -sf "$image_path/$PICTURE_SIZE/$api_zoom/$c_lat/$c_lon/1/1_1.png" -o "$RAINVIEWER_PIC" &
+    local image_path
+    image_path="$(jq -r '.host + .radar.past[-1].path' <<<"$response")"
+
+    local tmpdir
+    tmpdir=$(mktemp -d)
+
+    local tile_x tile_y offset_L offset_T
+    read -r tile_x tile_y offset_L offset_T <<<"$(latlon_to_tile "$c_lat" "$c_lon" "$api_zoom")"
+
+    local i=0 tx ty
+    for y in -1 0 1; do
+        for x in -1 0 1; do
+            tx=$((tile_x + x))
+            ty=$((tile_y + y))
+            curl -sf "$image_path/$((PICTURE_SIZE / 2))/$api_zoom/$tx/$ty/1/1_1.png" -o "$tmpdir/tile_${i}.png" &
+            ((i++))
+        done
+    done
     wait
+
+    magick "$tmpdir/tile_0.png" "$tmpdir/tile_1.png" "$tmpdir/tile_2.png" +append \
+        \( "$tmpdir/tile_3.png" "$tmpdir/tile_4.png" "$tmpdir/tile_5.png" +append \) \
+        \( "$tmpdir/tile_6.png" "$tmpdir/tile_7.png" "$tmpdir/tile_8.png" +append \) \
+        -append \
+        -crop "${PICTURE_SIZE}x${PICTURE_SIZE}+${offset_L}+${offset_T}" +repage \
+        -filter point \
+        "$RAINVIEWER_PIC"
 
     magick "$RAINVIEWER_PIC" \
         -crop "${crop_size}x${crop_size}+${crop_L}+${crop_T}" +repage \
         -filter point \
         -resize "${PICTURE_SIZE}x${PICTURE_SIZE}" \
-        "$CROPPED_RADAR_PIC" 2>/dev/null
+        "$CROPPED_RADAR_PIC"
+
+    rm -rf "$tmpdir"
 }
