@@ -10,6 +10,18 @@ check_connection_status() {
     done
 }
 
+check_file_directory() {
+    mkdir "$CSV_FOLDER" 2>/dev/null
+    if [ -z "$(ls -A "$CSV_FOLDER" 2>/dev/null)" ]; then
+        tput cup $(((LINES - PIC_H) / 2 + 2)) $(((COLUMNS - PIC_L) / 2))
+
+        print_qrcode
+        inotifywait -e create -e moved_to "$CSV_FOLDER" >/dev/null 2>&1
+        #kernel level (avoids wasted cpu cycles + instant) requires inotify-tools
+        clean_area "$(((LINES - QR_CODE_H) / 2))" "$(((COLUMNS - QR_CODE_L) / 2))" "$QR_CODE_H" "$QR_CODE_L"
+    fi
+}
+
 check_zoom() {
     local zoom="$1"
 
@@ -33,11 +45,6 @@ check_zoom() {
 check_file_index() {
     local cursor_index="$1"
     local files=()
-
-    mkdir "$CSV_FOLDER" 2>/dev/null
-    if [ -z "$(ls -A "$CSV_FOLDER" 2>/dev/null)" ]; then
-        fatal 'No files to source'
-    fi
 
     files=("$CSV_FOLDER"/*)
     max_position=$((${#files[@]} - 1))

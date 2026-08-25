@@ -29,6 +29,16 @@ draw_menu() {
     printf %s "$MENU_LIST"
 }
 
+print_qrcode() {
+    local i=0
+
+    while IFS= read -r line; do
+        tput cup "$(((LINES - QR_CODE_H) / 2 + i))" "$(((COLUMNS - QR_CODE_L) / 2))"
+        printf '%s' "$line"
+        ((i++))
+    done <<<"$QR_CODE_ASCII"
+}
+
 file_prompt() {
     local i
     local files=()

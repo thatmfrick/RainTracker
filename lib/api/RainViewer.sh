@@ -53,13 +53,13 @@ generate_radar_pic() {
         -append \
         -crop "${PICTURE_SIZE}x${PICTURE_SIZE}+${offset_L}+${offset_T}" +repage \
         -filter point \
-        "$RAINVIEWER_PIC"
+        "$RAINVIEWER_PIC" 2>/dev/null
 
     magick "$RAINVIEWER_PIC" \
         -crop "${crop_size}x${crop_size}+${crop_L}+${crop_T}" +repage \
         -filter point \
         -resize "${PICTURE_SIZE}x${PICTURE_SIZE}" \
-        "$CROPPED_RADAR_PIC"
+        "$CROPPED_RADAR_PIC" 2>/dev/null
 
     rm -rf "$tmpdir"
 }

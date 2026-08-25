@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
         <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
         <style>#map { height: 100vh; } body { margin: 0; }</style>
@@ -11,8 +12,10 @@
         <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
         <script>
             const map = L.map('map').setView([41.894, 12.469], 6);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+                maxZoom: 20, detectRetina: true
+            }).addTo(map);
             const drawnItems = new L.FeatureGroup();
             map.addLayer(drawnItems);
 
@@ -44,7 +47,9 @@
                 const name = prompt("Name this location:");
                 if (!name) return;
 
-                await fetch('/save', {
+                e.layer.name = name; // remember it for later edits
+
+                await fetch('/save-map', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, points })

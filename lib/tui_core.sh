@@ -95,7 +95,7 @@ kill_handler() {
 event_handler() {
     local csv_file
     local api_zoom virtual_zoom
-    local file_index=0 zoom=6 debounce=0
+    local file_index=0 zoom=9 old_index=1 debounce=0
     local data_pid resize_pid open_meteo_pid debounce_pid
 
     while true; do
@@ -106,6 +106,7 @@ event_handler() {
             key-donate) xdg-open "$KOFI" 2>/dev/null & ;;
             key-start)
                 draw_ui
+                check_file_directory
                 check_file_index "$file_index"
                 check_zoom "$zoom"
                 ;;
@@ -120,34 +121,37 @@ event_handler() {
                 check_zoom "$zoom"
                 ;;
             key-file-next)
-                kill_handler "$data_pid" "$open_meteo_pid" "$debounce_pid"
+                old_index=$file_index
                 ((file_index++))
                 check_file_index "$file_index"
                 ;;
             key-file-prev)
-                kill_handler "$data_pid" "$open_meteo_pid" "$debounce_pid"
+                old_index=$file_index
                 ((file_index--))
                 check_file_index "$file_index"
                 ;;
             selected-file)
                 csv_file=${data[1]}
                 file_index=${data[2]}
-                print_location "$csv_file"
-                debounce=0.5
-                sleep $debounce &
-                debounce_pid=$!
-                trap 'kill "$debounce_pid" 2>/dev/null' USR1
-                wait "$debounce_pid" 2>/dev/null
-                debounce_status=$?
-                trap - USR1
+                if ((old_index != file_index)); then
+                    kill_handler "$data_pid" "$open_meteo_pid" "$debounce_pid"
+                    print_location "$csv_file"
+                    debounce=0.5
+                    sleep $debounce &
+                    debounce_pid=$!
+                    trap 'kill "$debounce_pid" 2>/dev/null' USR1
+                    wait "$debounce_pid" 2>/dev/null
+                    debounce_status=$?
+                    trap - USR1
 
-                if ((debounce_status != 0)); then
-                    continue
+                    if ((debounce_status != 0)); then
+                        continue
+                    fi
+
+                    generate_weather_data "$csv_file" &
+                    open_meteo_pid=$!
+                    check_zoom "$zoom"
                 fi
-
-                generate_weather_data "$csv_file" &
-                open_meteo_pid=$!
-                check_zoom "$zoom"
                 ;;
             selected-zoom)
                 zoom=${data[1]}
