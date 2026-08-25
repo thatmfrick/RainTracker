@@ -1,5 +1,3 @@
 .cache/
 test/
-config/BDZ.csv
-config/LSP.csv
-config/PR.csv
+config/
