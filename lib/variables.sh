@@ -30,6 +30,7 @@ POLYGON_AREA_PIC=$(mktemp --suffix=.png)
 COMPOSITE_PIC=$(mktemp --suffix=.png)
 CROPPED_RADAR_PIC=$(mktemp --suffix=.png)
 MAP_PIC=$(mktemp --suffix=.png)
+FINAL_PIC=$(mktemp --suffix=.png)
 
 CSV_FOLDER="$(pwd)/config"
 BUSY_LOCK="/tmp/$RANDOM$RANDOM.$$"
