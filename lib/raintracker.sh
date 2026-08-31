@@ -5,8 +5,16 @@ draw_polygon() {
     local c_px c_py
     local polygon=""
 
-    read -r c_px c_py <<<"$(latlon_to_pixel "$c_lat" "$c_lon" "$full_zoom")"
-    polygon="$(pixel_coords "$c_px" "$c_py" "$full_zoom" "$csv_file")"
+    read -r c_px c_py <<<"$(awk -f lib/math.awk -v lat="$c_lat" -v lon="$c_lon" -v zoom="$full_zoom" -e 'BEGIN { print latlon_to_pixel(lat, lon, zoom) }')"
+
+    while IFS=, read -r lat lon || [[ -n "$lat" ]]; do
+        read -r world_x world_y <<<"$(awk -f lib/math.awk -v lat="$lat" -v lon="$lon" -v zoom="$full_zoom" -e 'BEGIN { print latlon_to_pixel(lat, lon, zoom) }')"
+
+        px=$((PICTURE_SIZE / 2 + world_x - c_px))
+        py=$((PICTURE_SIZE / 2 + world_y - c_py))
+
+        polygon+="$px,$py "
+    done <"$csv_file"
 
     magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" xc:none -fill none \
         -stroke black -strokewidth 2 \
@@ -32,7 +40,8 @@ core_fun() {
     full_zoom=$((api_zoom + virtual_zoom))
 
     local c_lat c_lon
-    read -r c_lat c_lon <<<"$(calculate_centroid "$csv_file")"
+
+    read -r c_lat c_lon <<<"$(awk -f lib/math.awk -v file="$csv_file" -e 'BEGIN { print centroid(file) }')"
 
     draw_polygon "$c_lat" "$c_lon" "$full_zoom" "$csv_file" &
     poly_pid=$!
@@ -47,15 +56,8 @@ core_fun() {
             generate_radar_pic "$c_lat" "$c_lon" "$api_zoom" "$virtual_zoom" "$api_response"
             wait "$poly_pid" "$map_pid" 2>/dev/null
 
-            magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" \
-                xc:none "$MAP_PIC" -composite \
-                "$CROPPED_RADAR_PIC" -compose dissolve -define compose:args=80 -composite \
-                -compose over "$POLYGON_BORDER_PIC" -composite \
-                assets/NESW.png -composite \
-                "$COMPOSITE_PIC" 2>/dev/null
+            print_radar
 
-            tput cup $(((LINES - PIC_H) / 2 + 2)) $(((COLUMNS - LOGO_L) / 2))
-            chafa --polite on --probe off "$COMPOSITE_PIC"
             rm -f "$BUSY_LOCK" 2>/dev/null
 
             read -r min sec <<<"$(radar_sleep_time "$api_response")"

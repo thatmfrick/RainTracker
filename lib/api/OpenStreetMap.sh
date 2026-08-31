@@ -8,7 +8,8 @@ generate_map() {
     local map_pic="$CACHE_DIR/${c_lat}_${c_lon}_${full_zoom}.png"
 
     tmpdir=$(mktemp -d)
-    read -r tile_x tile_y offset_L offset_T <<<"$(latlon_to_tile "$c_lat" "$c_lon" "$full_zoom")"
+
+    read -r tile_x tile_y offset_L offset_T <<<"$(awk -f lib/math.awk -v lat="$c_lat" -v lon="$c_lon" -v zoom="$full_zoom" -e 'BEGIN { print latlon_to_tile(lat, lon, zoom) }')"
 
     if [[ ! -f "$map_pic" ]]; then
         for y in -1 0 1; do
@@ -40,7 +41,7 @@ detect_location() {
     local c_lat c_lon
     local location
 
-    read -r c_lat c_lon <<<"$(calculate_centroid "$csv_file")"
+    read -r c_lat c_lon <<<"$(awk -f lib/math.awk -v file="$csv_file" -e 'BEGIN { print centroid(file) }')"
 
     location=$(curl -H "User-Agent: RainTracker.sh" -s "https://nominatim.openstreetmap.org/reverse?format=json&lat=$c_lat&lon=$c_lon" | jq -r '.address | "\(.hamlet // .road // "N/A") - \(.village // .county // "N/A")"')
 

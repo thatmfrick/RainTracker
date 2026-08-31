@@ -73,3 +73,20 @@ print_location() {
     tput cup $(((LINES - PIC_H) / 2)) $half_logo
     echo "⬅️ $location ➡️"
 }
+
+print_radar() {
+    magick -size "${PICTURE_SIZE}x${PICTURE_SIZE}" \
+        xc:none "$MAP_PIC" -composite \
+        "$CROPPED_RADAR_PIC" -compose dissolve -define compose:args=80 -composite \
+        -compose over "$POLYGON_BORDER_PIC" -composite \
+        assets/NESW.png -composite \
+        "$COMPOSITE_PIC" 2>/dev/null
+
+    magick "$COMPOSITE_PIC" \
+        \( -size 512x512 xc:black -fill white -draw "circle 255,255 255,0" \) \
+        -alpha off -compose CopyOpacity -composite \
+        "$FINAL_PIC"
+
+    tput cup $(((LINES - PIC_H) / 2 + 2)) $(((COLUMNS - LOGO_L) / 2))
+    chafa --polite on --probe off "$FINAL_PIC"
+}
